@@ -10,7 +10,7 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
 
       {/* Footer */}
       <footer className="p-4 border-t text-sm text-center">
-        © 2026 QueueSmart
+        © 2026 Krama
       </footer>
     </div>
   );

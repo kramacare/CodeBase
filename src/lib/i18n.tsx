@@ -74,7 +74,7 @@ export const I18nProvider = ({
 
   // Load language from localStorage on mount
   useEffect(() => {
-    const storedLanguage = localStorage.getItem('queuesmart-language') as Language;
+    const storedLanguage = localStorage.getItem('krama-language') as Language;
     if (storedLanguage && Object.keys(LANGUAGES).includes(storedLanguage)) {
       setLanguageState(storedLanguage);
     }
@@ -100,7 +100,7 @@ export const I18nProvider = ({
   // Set language and save to localStorage
   const setLanguage = (newLanguage: Language) => {
     setLanguageState(newLanguage);
-    localStorage.setItem('queuesmart-language', newLanguage);
+    localStorage.setItem('krama-language', newLanguage);
   };
 
   // Translation function

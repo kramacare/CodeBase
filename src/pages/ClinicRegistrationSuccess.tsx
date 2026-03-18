@@ -79,7 +79,7 @@ const ClinicRegistrationSuccess = () => {
             Registration Successful!
           </h1>
           <p className="text-muted-foreground">
-            Your clinic has been successfully registered with QueueSmart.
+            Your clinic has been successfully registered with Krama.
           </p>
           {emailSent && (
             <div className="mt-4 inline-flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-full">

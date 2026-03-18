@@ -15,8 +15,9 @@ const PatientLogin = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!email.trim()) {
@@ -30,9 +31,41 @@ const PatientLogin = () => {
     }
 
     setError("");
+    setLoading(true);
 
-    // ✅ Correct navigation
-    navigate("/patient");
+    try {
+      const response = await fetch("http://localhost:8001/auth/patient/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.detail || "Login failed");
+        return;
+      }
+
+      // Store user info in localStorage
+      localStorage.setItem("user", JSON.stringify({
+        id: data.user_id,
+        type: data.user_type,
+        email: email
+      }));
+
+      // ✅ Redirect to patient dashboard immediately
+      navigate("/patient");
+    } catch (err) {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -43,7 +76,7 @@ const PatientLogin = () => {
           <div className="max-w-sm text-center">
             <Activity className="mx-auto h-16 w-16 text-primary" />
             <h2 className="mt-6 text-3xl font-bold text-foreground">
-              QueueSmart
+              Krama
             </h2>
             <p className="mt-3 text-muted-foreground">
               Skip the wait. Book clinic appointments and track your queue in
@@ -111,8 +144,8 @@ const PatientLogin = () => {
                 </div>
               )}
 
-              <Button type="submit" className="w-full">
-                {mode === "otp" ? "Send OTP" : "Login"}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Logging in..." : (mode === "otp" ? "Send OTP" : "Login")}
                 <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
             </form>

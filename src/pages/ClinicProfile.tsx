@@ -112,7 +112,7 @@ const ClinicProfile = () => {
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to logout?")) {
-      localStorage.removeItem("queuesmart_clinic_profile");
+      localStorage.removeItem("krama_clinic_profile");
       window.location.href = "/clinic/login";
     }
   };

@@ -20,7 +20,7 @@ const AboutUs = () => {
       <div className="bg-[#00555A] text-white py-20">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-6">
-            About QueueSmart
+            About Krama
           </h1>
           <p className="text-xl md:text-2xl text-[#00FFF0] max-w-3xl mx-auto">
             Revolutionizing healthcare queue management with smart, efficient, and patient-centric solutions
@@ -43,7 +43,7 @@ const AboutUs = () => {
 
         {/* Features Grid */}
         <div className="mb-20">
-          <h2 className="text-3xl font-bold text-center text-[#0F172A] mb-12">Why Choose QueueSmart?</h2>
+          <h2 className="text-3xl font-bold text-center text-[#0F172A] mb-12">Why Choose Krama?</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             <div className="bg-white p-8 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
               <div className="w-12 h-12 bg-[#00555A]/10 rounded-lg flex items-center justify-center mb-4">
@@ -155,7 +155,7 @@ const AboutUs = () => {
                   <Mail className="w-5 h-5 text-[#00555A]" />
                   <div>
                     <p className="font-medium text-[#0F172A]">Email</p>
-                    <p className="text-gray-600">support@queuesmart.com</p>
+                    <p className="text-gray-600">support@krama.com</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

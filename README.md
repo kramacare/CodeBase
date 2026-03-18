@@ -1,4 +1,4 @@
-# QueueSmart - Healthcare Queue Management System
+# Krama - Healthcare Queue Management System
 
 A modern healthcare queue management system that helps clinics manage patient flow efficiently and patients avoid long waiting times.
 

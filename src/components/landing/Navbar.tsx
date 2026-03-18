@@ -14,7 +14,7 @@ const Navbar = () => {
           to="/"
           className="font-display text-xl font-bold tracking-tight text-[#00555A] hover:opacity-80 transition-all duration-200"
         >
-          QueueSmart
+          Krama
         </Link>
       </div>
     </nav>

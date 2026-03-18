@@ -18,31 +18,6 @@ import {
 } from "lucide-react";
 
 const Index = () => {
-  const testBackend = async () => {
-    try {
-      const res = await fetch("http://localhost:5050/api/tokens/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          doctorId: 1,
-          clinicId: 1,
-          categoryId: 1,
-          patientName: "Frontend Test",
-          source: "ONLINE"
-        })
-      });
-
-      const data = await res.json();
-      console.log("BACKEND RESPONSE:", data);
-      alert("Backend connected! Check console.");
-    } catch (err) {
-      console.error("Connection error:", err);
-      alert("Failed to connect to backend");
-    }
-  };
-
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-slate-50">
@@ -58,7 +33,7 @@ const Index = () => {
 
           <p className="mt-6 text-lg text-muted-foreground">
             Never sit in crowded waiting rooms again. Track your turn live and
-            arrive exactly when it's time. QueueSmart helps clinics manage flow
+            arrive exactly when it's time. Krama helps clinics manage flow
             and helps patients save hours.
           </p>
 
@@ -125,30 +100,6 @@ const Index = () => {
       </section>
 
 
-      {/* BACKEND CONNECTION TEST */}
-      <section className="bg-white py-16">
-        <div className="container mx-auto px-4">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-4">Backend Connection Test</h2>
-            <p className="text-gray-600 mb-6">Click the button below to test connection to the backend API</p>
-            
-            <button
-              onClick={testBackend}
-              style={{
-                padding: "10px 16px",
-                background: "#00555A",
-                color: "white",
-                borderRadius: "6px",
-                marginTop: "20px"
-              }}
-            >
-              Test Backend Connection
-            </button>
-          </div>
-        </div>
-      </section>
-
-
       {/* DIVIDER */}
       <div className="mx-auto max-w-6xl px-4">
         <div className="h-px bg-border/60"></div>
@@ -195,7 +146,7 @@ const Index = () => {
           </h2>
 
           <p className="text-center text-muted-foreground mt-4 max-w-2xl mx-auto">
-            QueueSmart improves patient experience while giving clinics complete
+            Krama improves patient experience while giving clinics complete
             control over daily flow and crowd management.
           </p>
 
@@ -241,7 +192,7 @@ const Index = () => {
       <section className="border-t border-border bg-secondary/30 py-16">
         <div className="section-container text-center">
           <h2 className="text-2xl font-semibold text-foreground">
-            Ready to use QueueSmart?
+            Ready to use Krama?
           </h2>
 
           <div className="mt-8 flex flex-wrap justify-center gap-4">

@@ -12,21 +12,49 @@ const ClinicRegistration = () => {
     clinicName: "", doctorName: "", specialization: "", address: "", city: "", phone: "", email: "", password: "",
   });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const update = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const required = ["clinicName", "doctorName", "email", "password"];
     if (required.some((k) => !form[k as keyof typeof form].trim()))
       return setError("Please fill all required fields.");
     setError("");
-    
-    // Navigate to success page with form data (excluding password)
-    const { password, ...dataToSend } = form;
-    navigate("/clinic/register/success", { 
-      state: { data: dataToSend } 
-    });
+    setLoading(true);
+
+    try {
+      const response = await fetch("http://localhost:8001/auth/clinic/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clinic_name: form.clinicName,
+          email: form.email,
+          password: form.password,
+          phone: form.phone,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.detail || "Registration failed");
+        return;
+      }
+
+      // ✅ Navigate to success page immediately after successful signup
+      const { password, ...dataToSend } = form;
+      navigate("/clinic/register/success", { 
+        state: { data: dataToSend } 
+      });
+    } catch (err) {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const field = (id: string, label: string, icon: React.ReactNode, placeholder: string, type = "text") => (
@@ -53,7 +81,7 @@ const ClinicRegistration = () => {
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-bold text-foreground">Register Your Clinic</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Join QueueSmart and bring smart queue management to your practice.
+            Join Krama and bring smart queue management to your practice.
           </p>
         </div>
 
@@ -77,8 +105,8 @@ const ClinicRegistration = () => {
           </div>
           {field("password", "Password *", <Lock className="h-4 w-4" />, "••••••••", "password")}
 
-          <Button type="submit" className="w-full">
-            Register Clinic <ArrowRight className="ml-1 h-4 w-4" />
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Registering Clinic..." : "Register Clinic"} <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </form>
 

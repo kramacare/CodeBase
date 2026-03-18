@@ -29,9 +29,9 @@ export type PatientProfile = {
 };
 
 const STORAGE_KEYS = {
-  profile: "queuesmart_patient_profile",
-  activeAppointment: "queuesmart_active_appointment",
-  visitHistory: "queuesmart_visit_history",
+  profile: "krama_patient_profile",
+  activeAppointment: "krama_active_appointment",
+  visitHistory: "krama_visit_history",
 };
 
 const defaultProfile: PatientProfile = {

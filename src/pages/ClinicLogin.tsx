@@ -14,8 +14,9 @@ const ClinicLogin = () => {
   const [clinicId, setClinicId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!clinicId.trim() || !password.trim()) {
@@ -24,9 +25,41 @@ const ClinicLogin = () => {
     }
 
     setError("");
+    setLoading(true);
 
-    // 🚀 Navigate to clinic dashboard
-    navigate("/clinic");
+    try {
+      const response = await fetch("http://localhost:8001/auth/clinic/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: clinicId,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.detail || "Login failed");
+        return;
+      }
+
+      // Store user info in localStorage
+      localStorage.setItem("user", JSON.stringify({
+        id: data.user_id,
+        type: data.user_type,
+        email: clinicId
+      }));
+
+      // 🚀 Redirect to clinic dashboard immediately
+      navigate("/clinic");
+    } catch (err) {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -78,8 +111,8 @@ const ClinicLogin = () => {
               </div>
             </div>
 
-            <Button type="submit" className="w-full">
-              Login <ArrowRight className="ml-1 h-4 w-4" />
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Logging in..." : "Login"} <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </form>
 

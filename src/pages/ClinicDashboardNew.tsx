@@ -47,7 +47,7 @@ const ClinicDashboardNew = () => {
 
         {/* Welcome Section */}
         <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
-          <h2 className="text-2xl font-semibold text-[#0F172A] mb-4">Welcome to QueueSmart</h2>
+          <h2 className="text-2xl font-semibold text-[#0F172A] mb-4">Welcome to Krama</h2>
           <p className="text-gray-600 mb-6">
             Manage your clinic operations efficiently with our comprehensive queue management system.
           </p>

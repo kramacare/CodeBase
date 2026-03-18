@@ -23,9 +23,9 @@ const PatientProfile = () => {
 
   const handleLogout = () => {
     // Clear all patient data
-    localStorage.removeItem("queuesmart_patient_profile");
-    localStorage.removeItem("queuesmart_active_appointment");
-    localStorage.removeItem("queuesmart_visit_history");
+    localStorage.removeItem("krama_patient_profile");
+    localStorage.removeItem("krama_active_appointment");
+    localStorage.removeItem("krama_visit_history");
     navigate("/");
   };
 
@@ -47,9 +47,9 @@ const PatientProfile = () => {
 
   const handleDeleteAccount = () => {
     // Clear all patient data
-    localStorage.removeItem("queuesmart_patient_profile");
-    localStorage.removeItem("queuesmart_active_appointment");
-    localStorage.removeItem("queuesmart_visit_history");
+    localStorage.removeItem("krama_patient_profile");
+    localStorage.removeItem("krama_active_appointment");
+    localStorage.removeItem("krama_visit_history");
     setDeleteDialogOpen(false);
     navigate("/");
   };

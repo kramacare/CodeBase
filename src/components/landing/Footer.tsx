@@ -8,16 +8,16 @@ const Footer = () => (
       {/* LEFT: BRAND */}
       <div>
         <p className="font-display text-lg font-semibold text-primary">
-          QueueSmart
+          Krama
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          support@queuesmart.in
+          support@krama.in
         </p>
       </div>
 
       {/* RIGHT: COPYRIGHT */}
       <p className="text-xs text-muted-foreground">
-        © {new Date().getFullYear()} QueueSmart. All rights reserved.
+        © {new Date().getFullYear()} Krama. All rights reserved.
       </p>
     </div>
   </footer>

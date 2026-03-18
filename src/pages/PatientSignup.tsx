@@ -9,15 +9,45 @@ import { User, Phone, Mail, Lock, ArrowRight } from "lucide-react";
 const PatientSignup = () => {
   const [form, setForm] = useState({ name: "", phone: "", email: "", password: "", confirm: "" });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const update = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.email || !form.password) return setError("Please fill all required fields.");
     if (form.password !== form.confirm) return setError("Passwords do not match.");
     setError("");
-    window.location.href = "/patient";
+    setLoading(true);
+
+    try {
+      const response = await fetch("http://localhost:8001/auth/patient/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          phone: form.phone,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.detail || "Signup failed");
+        return;
+      }
+
+      // ✅ Redirect to login page immediately after successful signup
+      window.location.href = "/patient/login";
+    } catch (err) {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -78,8 +108,8 @@ const PatientSignup = () => {
             </div>
           </div>
 
-          <Button type="submit" className="w-full">
-            Create Account <ArrowRight className="ml-1 h-4 w-4" />
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Creating Account..." : "Create Account"} <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </form>
 

@@ -11,7 +11,7 @@ const Header = () => {
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center">
             <h1 className="text-2xl font-bold text-[#00555A]">
-              QueueSmart
+              Krama
             </h1>
           </Link>
 
