@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database.db import engine
 from app.database.models import Base
-from app.routers import auth
+from app.routers import auth, queue
 import os
 from dotenv import load_dotenv
 
@@ -29,6 +29,7 @@ app.add_middleware(
 
 # ✅ Include routers AFTER CORS
 app.include_router(auth.router)
+app.include_router(queue.router)
 
 # ✅ Debug endpoint to show all routes
 @app.get("/debug/routes")

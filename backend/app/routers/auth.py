@@ -5,6 +5,7 @@ from app.database.db import get_db
 from app.database.models import Clinic, Patient
 from app.schemas import ClinicSignup, ClinicLogin, PatientSignup, PatientLogin, Response, LoginResponse
 from app.security import hash_password, verify_password
+from app.utils import get_unique_clinic_id
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -23,8 +24,17 @@ async def clinic_signup(clinic_data: ClinicSignup, db: AsyncSession = Depends(ge
     
     # Hash password and create clinic
     hashed_password = hash_password(clinic_data.password)
+    
+    # Generate unique clinic ID
+    clinic_id = await get_unique_clinic_id(db)
+    
     new_clinic = Clinic(
+        clinic_id=clinic_id,
         clinic_name=clinic_data.clinic_name,
+        doctor_name=clinic_data.doctor_name,
+        specialization=clinic_data.specialization,
+        address=clinic_data.address,
+        city=clinic_data.city,
         email=clinic_data.email,
         password=hashed_password,
         phone=clinic_data.phone
@@ -34,18 +44,23 @@ async def clinic_signup(clinic_data: ClinicSignup, db: AsyncSession = Depends(ge
     await db.commit()
     await db.refresh(new_clinic)
     
-    return {"message": "Signup successful"}
+    return {"message": "Signup successful", "clinic_id": clinic_id}
 
 @router.post("/clinic/login", response_model=LoginResponse)
 async def clinic_login(login_data: ClinicLogin, db: AsyncSession = Depends(get_db)):
-    # Find clinic by email
+    # Try to find clinic by email first, then by clinic_id
     result = await db.execute(select(Clinic).where(Clinic.email == login_data.email))
     clinic = result.scalar_one_or_none()
+    
+    # If not found by email, try clinic_id
+    if not clinic:
+        result = await db.execute(select(Clinic).where(Clinic.clinic_id == login_data.email))
+        clinic = result.scalar_one_or_none()
     
     if not clinic or not verify_password(login_data.password, clinic.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
+            detail="Invalid clinic ID/email or password"
         )
     
     return {
