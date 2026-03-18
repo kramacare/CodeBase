@@ -34,7 +34,7 @@ const PatientLogin = () => {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8001/auth/patient/login", {
+      const response = await fetch("http://localhost:8000/auth/patient/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

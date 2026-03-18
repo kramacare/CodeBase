@@ -23,7 +23,7 @@ import LiveQueue from "./pages/LiveQueue";
 import PatientLogin from "./pages/PatientLogin";
 import PatientSignup from "./pages/PatientSignup";
 import ClinicLogin from "./pages/ClinicLogin";
-import ClinicRegistration from "./pages/ClinicRegistration";
+import ClinicSignup from "./pages/ClinicSignup";
 import ClinicRegistrationSuccess from "./pages/ClinicRegistrationSuccess";
 import AboutUs from "./pages/AboutUs";
 import NotFound from "./pages/NotFound";
@@ -46,7 +46,7 @@ function App() {
 
             {/* Clinic Auth with Header */}
             <Route path="/clinic/login" element={<MainLayout><ClinicLogin /></MainLayout>} />
-            <Route path="/clinic/register" element={<MainLayout><ClinicRegistration /></MainLayout>} />
+            <Route path="/clinic/register" element={<MainLayout><ClinicSignup /></MainLayout>} />
             <Route path="/clinic/register/success" element={<MainLayout><ClinicRegistrationSuccess /></MainLayout>} />
 
             {/* Patient Area without Header */}
