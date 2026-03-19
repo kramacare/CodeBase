@@ -14,50 +14,44 @@ const ClinicSignup = () => {
     password: "",
     confirm: "",
     phone: "",
-    address: ""
+    address: "",
+    doctor_name: ""
   });
-  const [doctors, setDoctors] = useState([{ name: "", specialization: "" }]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const update = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  const addDoctor = () => {
-    setDoctors([...doctors, { name: "", specialization: "" }]);
-  };
-
-  const removeDoctor = (index: number) => {
-    const newDoctors = doctors.filter((_, i) => i !== index);
-    setDoctors(newDoctors);
-  };
-
-  const updateDoctor = (index: number, field: string, value: string) => {
-    const newDoctors = [...doctors];
-    newDoctors[index] = { ...newDoctors[index], [field]: value };
-    setDoctors(newDoctors);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log("Form submitted with data:", form);
+    
     if (!form.clinic_name || !form.email || !form.password || !form.phone || !form.address) {
+      console.log("Validation failed - missing required fields");
       return setError("Please fill all required fields.");
     }
     
     if (form.password !== form.confirm) {
+      console.log("Password mismatch");
       return setError("Passwords do not match.");
     }
-
-    // Validate at least one doctor is filled
-    const validDoctors = doctors.filter(doc => doc.name.trim() && doc.specialization.trim());
-    if (validDoctors.length === 0) {
-      return setError("Please add at least one doctor with name and specialization.");
-    }
     
+    console.log("Validation passed, sending request...");
     setError("");
     setLoading(true);
 
     try {
+      console.log("Sending request to:", "http://localhost:8000/auth/clinic/signup");
+      console.log("Request body:", {
+        clinic_name: form.clinic_name,
+        email: form.email,
+        password: form.password,
+        phone: form.phone,
+        address: form.address,
+        doctor_name: form.doctor_name
+      });
+      
       const response = await fetch("http://localhost:8000/auth/clinic/signup", {
         method: "POST",
         headers: {
@@ -69,9 +63,12 @@ const ClinicSignup = () => {
           password: form.password,
           phone: form.phone,
           address: form.address,
-          doctors: validDoctors
+          doctor_name: form.doctor_name
         }),
       });
+
+      console.log("Response status:", response.status);
+      console.log("Response headers:", response.headers);
 
       const data = await response.json();
 
@@ -80,13 +77,13 @@ const ClinicSignup = () => {
         return;
       }
 
-      // Store registration data for success page
+      // Navigate to success page with registration data
       const registrationData = {
-        clinicName: form.clinic_name,
+        clinic_name: form.clinic_name,
         email: form.email,
         phone: form.phone,
         address: form.address,
-        doctors: validDoctors
+        doctor_name: form.doctor_name
       };
 
       // Navigate to success page with registration data
@@ -159,78 +156,38 @@ const ClinicSignup = () => {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="address">Clinic Address</Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="address"
-                  placeholder="123 Main Street, City, State"
-                  value={form.address}
-                  onChange={(e) => update("address", e.target.value)}
-                  className="pl-9"
-                />
+            {/* Address Section */}
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="address">Clinic Address *</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="address"
+                    placeholder="Street address, building number, city, state, PIN code"
+                    value={form.address}
+                    onChange={(e) => update("address", e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Doctors Section */}
+            {/* Doctor Name Section */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-base font-medium">Doctors</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addDoctor}
-                  className="flex items-center gap-1"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Doctor
-                </Button>
-              </div>
-
-              {doctors.map((doctor, index) => (
-                <div key={index} className="grid gap-4 p-4 border rounded-lg bg-muted/30">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Doctor {index + 1}</span>
-                    </div>
-                    {doctors.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeDoctor(index)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label htmlFor={`doctor-name-${index}`}>Doctor Name</Label>
-                      <Input
-                        id={`doctor-name-${index}`}
-                        placeholder="Dr. John Smith"
-                        value={doctor.name}
-                        onChange={(e) => updateDoctor(index, "name", e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor={`doctor-spec-${index}`}>Specialization</Label>
-                      <Input
-                        id={`doctor-spec-${index}`}
-                        placeholder="Cardiology, General Practice, etc."
-                        value={doctor.specialization}
-                        onChange={(e) => updateDoctor(index, "specialization", e.target.value)}
-                      />
-                    </div>
-                  </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="doctor_name">Doctor Name (Optional)</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="doctor_name"
+                    placeholder="Dr. John Smith"
+                    value={form.doctor_name}
+                    onChange={(e) => update("doctor_name", e.target.value)}
+                    className="pl-9"
+                  />
                 </div>
-              ))}
+              </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
