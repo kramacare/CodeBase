@@ -30,6 +30,7 @@ class PatientLogin(BaseModel):
 class AuthResponse(BaseModel):
     message: str
     user_type: Optional[str] = None
+    clinic_id: Optional[str] = None
 
 class ErrorResponse(BaseModel):
     error: str

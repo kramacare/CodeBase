@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePatient } from "@/context/PatientContext";
 import { useQueue } from "@/context/QueueContext";
@@ -15,34 +15,56 @@ import {
 
 const PatientDashboard = () => {
   const navigate = useNavigate();
-  const {
-    profile,
-    activeAppointment,
-    clearActiveAppointment,
-  } = usePatient();
-  const { currentToken } = useQueue();
+  const { profile } = usePatient();
+  const { currentToken, queueStats, fetchQueueStats } = useQueue();
+  const [patientToken, setPatientToken] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Calculate what token is currently serving and patients ahead
-  const getTokenNumber = (token: string) => {
-    const match = token.match(/(\d+)/);
-    return match ? parseInt(match[1]) : 0;
+  useEffect(() => {
+    // Get logged-in patient's email to fetch their token
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      fetchPatientToken(user.email);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchPatientToken = async (patientEmail: string) => {
+    try {
+      // Try to find patient's token by their email/phone
+      const response = await fetch(`http://localhost:8000/queue/patient-dashboard/${PatientEmail}?clinic_id=ALL`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.your_token) {
+          setPatientToken({
+            token: `A-${data.your_token.token_number}`,
+            clinic: "Current Clinic",
+            doctor: "Available Doctor",
+            date: "Today",
+            time: "Now",
+            address: "Clinic Address",
+            status: data.status,
+            estimatedWaitMins: data.patients_ahead * 5,
+            patientsAhead: data.patients_ahead
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch patient token:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const patientTokenNum = activeAppointment
-    ? getTokenNumber(activeAppointment.token)
-    : 0;
-  const patientsAhead = Math.max(0, patientTokenNum - currentToken);
-  const nowServingToken = `A-${currentToken}`;
-
-  // Automatically clear appointment when patient's token is served (when next patient goes in)
-  useEffect(() => {
-    if (activeAppointment && currentToken > 0 && patientTokenNum > 0) {
-      // Clear when currentToken >= patientTokenNum (their turn has been served)
-      if (currentToken >= patientTokenNum) {
-        clearActiveAppointment();
-      }
-    }
-  }, [currentToken, activeAppointment, patientTokenNum, clearActiveAppointment]);
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -82,7 +104,7 @@ const PatientDashboard = () => {
         </div>
 
         {/* Appointment details – only if they have an active booking */}
-        {activeAppointment && (
+        {patientToken && (
           <>
             {/* Token Details Section */}
             <div className="mb-6 rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -97,7 +119,7 @@ const PatientDashboard = () => {
                   <div className="flex-1">
                     <p className="text-xs text-muted-foreground">Your Token</p>
                     <p className="text-3xl font-bold text-[#00555A] tracking-wider">
-                      {activeAppointment.token}
+                      {patientToken.token}
                     </p>
                   </div>
                 </div>
@@ -106,7 +128,9 @@ const PatientDashboard = () => {
                 <div className="flex items-center gap-3 text-sm">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <span>
-                    Currently serving: <strong className="text-[#00555A]">{nowServingToken}</strong>
+                    Currently serving: <strong className="text-[#00555A]">
+                      {patientToken.token_number ? `A-${patientToken.token_number}` : 'No one'}
+                    </strong>
                   </span>
                 </div>
 
@@ -114,7 +138,7 @@ const PatientDashboard = () => {
                 <div className="flex items-center gap-3 text-sm">
                   <UserCheck className="h-4 w-4 text-muted-foreground" />
                   <span>
-                    Patients ahead: <strong>{patientsAhead}</strong>
+                    Patients ahead: <strong>{patientToken.patients_ahead || 0}</strong>
                   </span>
                 </div>
 
@@ -124,7 +148,7 @@ const PatientDashboard = () => {
                   <span>
                     Est. wait time:{" "}
                     <strong>
-                      {activeAppointment.estimatedWaitMins ?? patientsAhead * 5} mins
+                      {patientToken.estimatedWaitMins || 0} mins
                     </strong>
                   </span>
                 </div>
@@ -135,7 +159,7 @@ const PatientDashboard = () => {
                   <span>
                     Status:{" "}
                     <strong className="capitalize">
-                      {activeAppointment.status.replace("_", " ")}
+                      {patientToken.status || 'waiting'}
                     </strong>
                   </span>
                 </div>
@@ -148,12 +172,12 @@ const PatientDashboard = () => {
                     onClick={() =>
                       navigate("/track", {
                         state: {
-                          token: activeAppointment.token,
-                          clinic: activeAppointment.clinic,
-                          doctor: activeAppointment.doctor,
-                          date: activeAppointment.date,
-                          time: activeAppointment.time,
-                          address: activeAppointment.address,
+                          token: patientToken.token,
+                          clinic: patientToken.clinic,
+                          doctor: patientToken.doctor,
+                          date: patientToken.date,
+                          time: patientToken.time,
+                          address: patientToken.address,
                         },
                       })
                     }
@@ -164,6 +188,29 @@ const PatientDashboard = () => {
               </div>
             </div>
           </>
+        )}
+
+        {/* Queue Stats - Show real data from backend */}
+        {queueStats && (
+          <div className="grid gap-4 sm:grid-cols-3 mb-8">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-sm text-center">
+              <h3 className="text-lg font-semibold text-foreground mb-2">Total Waiting</h3>
+              <p className="text-3xl font-bold text-[#00555A]">{queueStats.total_waiting}</p>
+              <p className="text-sm text-muted-foreground">patients in queue</p>
+            </div>
+            
+            <div className="rounded-xl border border-border bg-card p-6 shadow-sm text-center">
+              <h3 className="text-lg font-semibold text-foreground mb-2">Currently Serving</h3>
+              <p className="text-3xl font-bold text-green-600">{queueStats.currently_serving}</p>
+              <p className="text-sm text-muted-foreground">token number</p>
+            </div>
+            
+            <div className="rounded-xl border border-border bg-card p-6 shadow-sm text-center">
+              <h3 className="text-lg font-semibold text-foreground mb-2">Completed Today</h3>
+              <p className="text-3xl font-bold text-green-600">{queueStats.completed_today}</p>
+              <p className="text-sm text-muted-foreground">patients</p>
+            </div>
+          </div>
         )}
 
         <p className="mt-6 text-center text-sm text-muted-foreground">

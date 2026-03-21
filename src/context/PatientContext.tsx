@@ -80,23 +80,15 @@ export function PatientProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<PatientProfile>(
     () => loadJson(STORAGE_KEYS.profile, defaultProfile)
   );
-  // Mock active appointment for demo
-  const mockActiveAppointment: ActiveAppointment = {
-    token: "A-17",
-    clinic: "CityCare Clinic",
-    doctor: "Dr. Ananya Sharma",
-    date: "Feb 19, 2026",
-    time: "11:00 AM",
-    address: "42 MG Road, Indiranagar, Bangalore",
-    status: "waiting",
-    estimatedWaitMins: 20,
-    patientsAhead: 4,
-  };
-
+  // Load real active appointment from backend
   const [activeAppointment, setActiveAppointmentState] = useState<ActiveAppointment | null>(() => {
     const saved = loadJson<ActiveAppointment | null>(STORAGE_KEYS.activeAppointment, null);
-    // If no saved appointment, use mock data for demo
-    return saved || mockActiveAppointment;
+    // If no saved appointment, check backend for today's token
+    if (!saved) {
+      // We'll fetch from backend when user has an active token
+      return null; // Will be handled by dashboard
+    }
+    return saved;
   });
   // Mock visit history for demo - 2 clinics they've visited
   const mockVisitHistory: VisitEntry[] = [

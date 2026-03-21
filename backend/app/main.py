@@ -21,8 +21,7 @@ app.include_router(auth.router)
 @app.on_event("startup")
 async def startup():
     async with engine.begin() as conn:
-        # Drop the clinics table to recreate with new schema
-        await conn.execute(text("DROP TABLE IF EXISTS clinics CASCADE"))
+        # Create tables if they don't exist
         await conn.run_sync(Base.metadata.create_all)
 
 @app.get("/")

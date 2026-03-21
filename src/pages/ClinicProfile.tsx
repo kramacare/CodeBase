@@ -1,629 +1,387 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, User, Lock, Phone, MapPin, Building2, Mail, Calendar, Clock, Edit, Save, Eye, EyeOff, Key, LogOut, Trash2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, Phone, Lock, Trash2, User, LogOut, Building2, Mail } from "lucide-react";
 
 const ClinicProfile = () => {
-  const [activeTab, setActiveTab] = useState('profile');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showOldPassword, setShowOldPassword] = useState(false);
-  const [showPhone, setShowPhone] = useState(false);
-  const [showAddress, setShowAddress] = useState(false);
-  const [showClinicInfo, setShowClinicInfo] = useState(false);
-
-  // Profile state
-  const [profile, setProfile] = useState({
-    name: "Dr. Sarah Johnson",
-    email: "sarah.johnson@clinic.com",
-    phone: "+1 (555) 123-4567",
-    specialization: "General Physician",
-    license: "MD-123456",
-    experience: "10 years",
-    bio: "Experienced general physician with focus on preventive care and chronic disease management."
-  });
-
-  // Password state
-  const [passwords, setPasswords] = useState({
-    current: "",
-    new: "",
-    confirm: ""
-  });
-
-  // Phone state
-  const [phone, setPhone] = useState({
-    current: "+1 (555) 123-4567",
-    new: ""
-  });
-
-  // Address state
-  const [address, setAddress] = useState({
-    current: {
-      street: "123 Medical Center Drive",
-      city: "Boston",
-      state: "MA",
-      zip: "02115",
-      country: "United States"
-    },
-    new: {
-      street: "",
-      city: "",
-      state: "",
-      zip: "",
-      country: ""
+  const navigate = useNavigate();
+  const [dbProfile, setDbProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Get the actual logged-in clinic ID from localStorage
+  const getLoggedInClinicId = () => {
+    try {
+      const clinicId = localStorage.getItem("clinic_id");
+      return clinicId;
+    } catch (error) {
+      console.error("Error getting clinic ID from localStorage:", error);
     }
-  });
+    return null;
+  };
+  
+  const loggedInClinicId = getLoggedInClinicId();
+  
+  // Form states
+  const [phone, setPhone] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  // Clinic info state
-  const [clinicInfo, setClinicInfo] = useState({
-    name: "CityCare Medical Center",
-    email: "contact@citycare.com",
-    phone: "+1 (555) 987-6543",
-    address: "456 Health Avenue, Boston, MA 02115",
-    website: "www.citycare.com",
-    established: "2015",
-    license: "CLINIC-001",
-    taxId: "12-3456789",
-    description: "Comprehensive healthcare facility providing primary care, pediatrics, and specialized medical services.",
-    operatingHours: "Mon-Fri: 8AM-6PM, Sat: 9AM-1PM, Sun: Closed"
-  });
+  // Fetch clinic data from database
+  useEffect(() => {
+    const fetchClinicData = async () => {
+      if (!loggedInClinicId) {
+        console.error("No logged-in clinic found");
+        setLoading(false);
+        return;
+      }
 
-  const [editingClinicInfo, setEditingClinicInfo] = useState(false);
+      try {
+        const response = await fetch(`http://localhost:8000/auth/clinic/data?clinic_id=${loggedInClinicId}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log("Clinic data received:", data);
+          setDbProfile(data);
+          setPhone(data.phone || "");
+        } else {
+          console.error("Failed to fetch clinic data:", response.status);
+        }
+      } catch (error) {
+        console.error("Failed to fetch clinic data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const handleSaveProfile = () => {
-    // Save profile logic
-    console.log("Saving profile...");
+    fetchClinicData();
+  }, [loggedInClinicId]);
+
+  const handleSave = async () => {
+    // This function is not needed - we'll remove editing functionality
   };
 
-  const handleChangePassword = () => {
-    if (passwords.new && passwords.new === passwords.confirm) {
-      // Change password logic
-      console.log("Password changed successfully");
-      setPasswords({ ...passwords, current: passwords.new, new: "", confirm: "" });
-      setShowPassword(false);
+  const handleChangePhone = async () => {
+    if (!loggedInClinicId) {
+      alert("No logged-in clinic found");
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:8000/auth/clinic/change-phone", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clinic_id: loggedInClinicId,
+          new_phone: phone
+        })
+      });
+
+      if (response.ok) {
+        alert("Phone number updated successfully!");
+        // Refresh data to show updated phone
+        const fetchUpdatedData = async () => {
+          try {
+            const dataResponse = await fetch(`http://localhost:8000/auth/clinic/data?clinic_id=${loggedInClinicId}`);
+            if (dataResponse.ok) {
+              const data = await dataResponse.json();
+              setDbProfile(data);
+              setPhone(data.phone || "");
+            }
+          } catch (error) {
+            console.error("Failed to refresh data:", error);
+          }
+        };
+        fetchUpdatedData();
+      } else {
+        const error = await response.json();
+        alert(error.detail || "Failed to update phone number");
+      }
+    } catch (error) {
+      alert("Network error. Please try again.");
     }
   };
 
-  const handleChangePhone = () => {
-    if (phone.new) {
-      // Change phone logic
-      console.log("Phone changed successfully");
-      setPhone({ ...phone, current: phone.new, new: "" });
-      setShowPhone(false);
+  const handleChangePassword = async () => {
+    if (!loggedInClinicId) {
+      alert("No logged-in clinic found");
+      return;
+    }
+
+    if (!currentPassword || !newPassword || newPassword !== confirmPassword) {
+      alert("Please fill all password fields correctly");
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:8000/auth/clinic/change-password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clinic_id: loggedInClinicId,
+          current_password: currentPassword,
+          new_password: newPassword
+        })
+      });
+
+      if (response.ok) {
+        alert("Password changed successfully!");
+        // Clear password fields
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        const error = await response.json();
+        alert(error.detail || "Failed to change password");
+      }
+    } catch (error) {
+      alert("Network error. Please try again.");
     }
   };
 
-  const handleChangeAddress = () => {
-    if (address.current.street && address.current.city && address.current.state && address.current.zip) {
-      // Change address logic
-      console.log("Address changed successfully");
-      setAddress({ ...address, current: { ...address.current, street: "", city: "", state: "", zip: "", country: "" } });
-      setShowAddress(false);
+  const handleDeleteAccount = async () => {
+    if (!loggedInClinicId) {
+      alert("No logged-in clinic found");
+      return;
     }
-  };
 
-  const handleChangeClinicInfo = () => {
-    if (clinicInfo.name && clinicInfo.email && clinicInfo.phone) {
-      // Change clinic info logic
-      console.log("Clinic info changed successfully");
-      // Update logic here
+    const password = prompt("Enter your password to delete account:");
+    if (!password) {
+      alert("Password required to delete account");
+      return;
+    }
+
+    if (!confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/auth/clinic/delete`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clinic_id: loggedInClinicId
+        })
+      });
+
+      if (response.ok) {
+        alert("Account deleted successfully");
+        localStorage.clear();
+        navigate("/clinic/login");
+      } else {
+        alert("Failed to delete account");
+      }
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      alert("Error deleting account");
     }
   };
 
   const handleLogout = () => {
-    if (window.confirm("Are you sure you want to logout?")) {
-      localStorage.removeItem("krama_clinic_profile");
-      window.location.href = "/clinic/login";
-    }
+    localStorage.removeItem("krama_patient_profile");
+    localStorage.removeItem("krama_active_appointment");
+    localStorage.removeItem("krama_visit_history");
+    localStorage.removeItem("user");
+    navigate("/");
   };
 
-  const handleDeleteAccount = () => {
-    if (window.confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
-      console.log("Account deleted");
-      // Delete account logic
-    }
-  };
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-3xl items-center gap-3 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-4xl items-center gap-3 px-4">
           <Link
             to="/clinic"
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Go back"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />
+            <span className="text-sm font-medium">Dashboard</span>
           </Link>
-          <span className="font-semibold text-foreground">Profile Settings</span>
+          <span className="font-semibold text-gray-900">Clinic Profile Settings</span>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 pb-12">
-        <div className="max-w-4xl mx-auto">
-          {/* Tab Navigation */}
-          <div className="flex space-x-1 mb-8 border-b border-gray-200">
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'profile'
-                  ? 'border-[#00555A] text-[#00555A]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <User className="h-4 w-4 mr-2" />
-              Profile
-            </button>
-            <button
-              onClick={() => setActiveTab('security')}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'security'
-                  ? 'border-[#00555A] text-[#00555A]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Lock className="h-4 w-4 mr-2" />
-              Security
-            </button>
-            <button
-              onClick={() => setActiveTab('clinic')}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'clinic'
-                  ? 'border-[#00555A] text-[#00555A]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Building2 className="h-4 w-4 mr-2" />
-              Clinic Info
-            </button>
+      <main className="mx-auto max-w-4xl px-4 py-8">
+        {/* Profile Info Card */}
+        <div className="mb-8 rounded-2xl bg-white shadow-lg overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/20 backdrop-blur border-4 border-white/30">
+                <Building2 className="h-10 w-10 text-white" />
+              </div>
+              <div className="text-white">
+                <h1 className="text-2xl font-bold">
+                  {dbProfile ? dbProfile.clinic_name : (loading ? 'Loading...' : 'Clinic')}
+                </h1>
+                <p className="text-blue-100">
+                  {dbProfile ? dbProfile.email : (loading ? 'Loading...' : 'clinic@example.com')}
+                </p>
+                {loading && <p className="text-xs text-blue-200 mt-1">Fetching from database...</p>}
+              </div>
+            </div>
+          </div>
+          
+          {dbProfile && (
+            <div className="p-6 bg-gray-50 border-t">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Phone:</span>
+                  <p className="font-medium text-gray-900">{dbProfile.phone}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Address:</span>
+                  <p className="font-medium text-gray-900">{dbProfile.address}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Doctor Name:</span>
+                  <p className="font-medium text-gray-900">{dbProfile.doctor_name}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Clinic ID:</span>
+                  <p className="font-medium text-gray-900 font-mono">{dbProfile.clinic_id}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Member Since:</span>
+                  <p className="font-medium text-gray-900">
+                    {new Date(dbProfile.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Settings Cards Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Change Phone Number */}
+          <div className="rounded-2xl bg-white shadow-lg p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+                <Phone className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Change Phone Number</h2>
+                <p className="text-sm text-gray-500">Update your contact number</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="phone" className="text-sm font-medium text-gray-700">New Phone Number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <Button 
+                onClick={handleChangePhone}
+                disabled={!phone}
+                className="w-full bg-[#00555A] hover:bg-[#004455] text-white"
+              >
+                Update Phone Number
+              </Button>
+            </div>
           </div>
 
-          {/* Profile Tab */}
-          {activeTab === 'profile' && (
-            <div className="space-y-6">
-              {/* Doctor Details */}
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="text-xl font-semibold text-[#0F172A] mb-6 flex items-center gap-2">
-                  <User className="h-6 w-6 text-[#00555A]" />
-                  Doctor Details
-                </h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                    <Input
-                      value={profile.name}
-                      onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                    <Input
-                      type="email"
-                      value={profile.email}
-                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                    <Input
-                      type="tel"
-                      value={profile.phone}
-                      onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Specialization</label>
-                    <Input
-                      value={profile.specialization}
-                      onChange={(e) => setProfile({ ...profile, specialization: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">License Number</label>
-                    <Input
-                      value={profile.license}
-                      onChange={(e) => setProfile({ ...profile, license: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Years of Experience</label>
-                    <Input
-                      type="number"
-                      value={profile.experience}
-                      onChange={(e) => setProfile({ ...profile, experience: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
-                    <textarea
-                      value={profile.bio}
-                      onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                      rows={4}
-                      className="w-full p-3 border border-gray-300 rounded-lg"
-                      placeholder="Tell us about yourself..."
-                    />
-                  </div>
-                </div>
-                
-                <div className="mt-6 flex justify-end">
-                  <Button
-                    onClick={handleSaveProfile}
-                    className="bg-[#00555A] text-white hover:opacity-90 rounded-xl px-6 py-3 transition-all duration-200"
-                  >
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Profile
-                  </Button>
-                </div>
+          {/* Change Password */}
+          <div className="rounded-2xl bg-white shadow-lg p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                <Lock className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Change Password</h2>
+                <p className="text-sm text-gray-500">Update your account password</p>
               </div>
             </div>
-          )}
-
-          {/* Security Tab */}
-          {activeTab === 'security' && (
-            <div className="space-y-6">
-              {/* Change Password */}
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="text-xl font-semibold text-[#0F172A] mb-6 flex items-center gap-2">
-                  <Lock className="h-6 w-6 text-[#00555A]" />
-                  Security Settings
-                </h2>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
-                    <div className="relative">
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        value={passwords.current}
-                        onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
-                        className="w-full pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 text-gray-500 hover:text-gray-700"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-                    <Input
-                      type="password"
-                      value={passwords.new}
-                      onChange={(e) => setPasswords({ ...passwords, new: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-                    <Input
-                      type="password"
-                      value={passwords.confirm}
-                      onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div className="flex gap-3 mt-6">
-                    <Button
-                      onClick={handleChangePassword}
-                      disabled={!passwords.new || !passwords.confirm || passwords.new !== passwords.confirm}
-                      className="flex-1 bg-[#00555A] text-white hover:opacity-90 rounded-xl px-6 py-3 transition-all duration-200 disabled:opacity-50"
-                    >
-                      Change Password
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setPasswords({ current: "", new: "", confirm: "" });
-                        setShowPassword(false);
-                      }}
-                      className="flex-1 border-gray-300 text-[#0F172A] hover:bg-gray-50 rounded-xl px-6 py-3 transition-all duration-200"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
+            
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="current-pw" className="text-sm font-medium text-gray-700">Current Password</Label>
+                <Input
+                  id="current-pw"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="mt-1"
+                />
               </div>
-
-              {/* Change Phone */}
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="text-xl font-semibold text-[#0F172A] mb-6 flex items-center gap-2">
-                  <Phone className="h-6 w-6 text-[#00555A]" />
-                  Change Phone Number
-                </h2>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Current Phone</label>
-                    <Input
-                      type="tel"
-                      value={phone.current}
-                      onChange={(e) => setPhone({ ...phone, current: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">New Phone Number</label>
-                    <Input
-                      type="tel"
-                      value={phone.new}
-                      onChange={(e) => setPhone({ ...phone, new: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div className="flex gap-3 mt-6">
-                    <Button
-                      onClick={handleChangePhone}
-                      disabled={!phone.new}
-                      className="flex-1 bg-[#00555A] text-white hover:opacity-90 rounded-xl px-6 py-3 transition-all duration-200 disabled:opacity-50"
-                    >
-                      Update Phone
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setPhone({ ...phone, new: "" });
-                        setShowPhone(false);
-                      }}
-                      className="flex-1 border-gray-300 text-[#0F172A] hover:bg-gray-50 rounded-xl px-6 py-3 transition-all duration-200"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
+              <div>
+                <Label htmlFor="new-pw" className="text-sm font-medium text-gray-700">New Password</Label>
+                <Input
+                  id="new-pw"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="mt-1"
+                />
               </div>
+              <div>
+                <Label htmlFor="confirm-pw" className="text-sm font-medium text-gray-700">Confirm New Password</Label>
+                <Input
+                  id="confirm-pw"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <Button 
+                onClick={handleChangePassword}
+                disabled={!currentPassword || !newPassword || newPassword !== confirmPassword}
+                className="w-full bg-[#00555A] hover:bg-[#004455] text-white"
+              >
+                Change Password
+              </Button>
+            </div>
+          </div>
 
-              {/* Change Address */}
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="text-xl font-semibold text-[#0F172A] mb-6 flex items-center gap-2">
-                  <MapPin className="h-6 w-6 text-[#00555A]" />
-                  Change Address
-                </h2>
-                
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
-                      <Input
-                        value={address.current.street}
-                        onChange={(e) => setAddress({ ...address, current: { ...address.current, street: e.target.value } })}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-                      <Input
-                        value={address.current.city}
-                        onChange={(e) => setAddress({ ...address, current: { ...address.current, city: e.target.value } })}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
-                      <Input
-                        value={address.current.state}
-                        onChange={(e) => setAddress({ ...address, current: { ...address.current, state: e.target.value } })}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">ZIP Code</label>
-                      <Input
-                        value={address.current.zip}
-                        onChange={(e) => setAddress({ ...address, current: { ...address.current, zip: e.target.value } })}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
-                      <Input
-                        value={address.current.country}
-                        onChange={(e) => setAddress({ ...address, current: { ...address.current, country: e.target.value } })}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-3 mt-6">
-                    <Button
-                      onClick={handleChangeAddress}
-                      disabled={!address.current.street || !address.current.city || !address.current.state || !address.current.zip}
-                      className="flex-1 bg-[#00555A] text-white hover:opacity-90 rounded-xl px-6 py-3 transition-all duration-200 disabled:opacity-50"
-                    >
-                      Update Address
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setAddress({ ...address, current: { ...address.current, street: "", city: "", state: "", zip: "", country: "" } });
-                        setShowAddress(false);
-                      }}
-                      className="flex-1 border-gray-300 text-[#0F172A] hover:bg-gray-50 rounded-xl px-6 py-3 transition-all duration-200"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
+          {/* Delete Account */}
+          <div className="rounded-2xl bg-white shadow-lg p-6 lg:col-span-2">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Delete Account</h2>
+                <p className="text-sm text-gray-500">Permanently delete your clinic account and all data</p>
               </div>
             </div>
-          )}
-
-          {/* Clinic Info Tab */}
-          {activeTab === 'clinic' && (
-            <div className="space-y-6">
-              {/* Clinic Information */}
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="text-xl font-semibold text-[#0F172A] mb-6 flex items-center gap-2">
-                  <Building2 className="h-6 w-6 text-[#00555A]" />
-                  Clinic Information
-                </h2>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Clinic Name</label>
-                    <Input
-                      value={clinicInfo.name}
-                      onChange={(e) => setClinicInfo({ ...clinicInfo, name: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                    <Input
-                      type="email"
-                      value={clinicInfo.email}
-                      onChange={(e) => setClinicInfo({ ...clinicInfo, email: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                    <Input
-                      type="tel"
-                      value={clinicInfo.phone}
-                      onChange={(e) => setClinicInfo({ ...clinicInfo, phone: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
-                    <Input
-                      value={clinicInfo.website}
-                      onChange={(e) => setClinicInfo({ ...clinicInfo, website: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Established Year</label>
-                    <Input
-                      type="number"
-                      value={clinicInfo.established}
-                      onChange={(e) => setClinicInfo({ ...clinicInfo, established: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">License Number</label>
-                    <Input
-                      value={clinicInfo.license}
-                      onChange={(e) => setClinicInfo({ ...clinicInfo, license: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Tax ID</label>
-                    <Input
-                      value={clinicInfo.taxId}
-                      onChange={(e) => setClinicInfo({ ...clinicInfo, taxId: e.target.value })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
-                      <Input
-                        value={clinicInfo.address}
-                        onChange={(e) => setClinicInfo({ ...clinicInfo, address: e.target.value })}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Operating Hours</label>
-                      <Input
-                        value={clinicInfo.operatingHours}
-                        onChange={(e) => setClinicInfo({ ...clinicInfo, operatingHours: e.target.value })}
-                        className="w-full"
-                        placeholder="Mon-Fri: 8AM-6PM, Sat: 9AM-1PM, Sun: Closed"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="mt-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                    <textarea
-                      value={clinicInfo.description}
-                      onChange={(e) => setClinicInfo({ ...clinicInfo, description: e.target.value })}
-                      rows={4}
-                      className="w-full p-3 border border-gray-300 rounded-lg"
-                      placeholder="Describe your clinic..."
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Danger Zone */}
-              <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-                <h2 className="text-xl font-semibold text-red-800 mb-4 flex items-center gap-2">
-                  <Trash2 className="h-6 w-6 text-red-600" />
-                  Danger Zone
-                </h2>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200">
-                    <div>
-                      <p className="font-medium text-gray-900">Delete Account</p>
-                      <p className="text-sm text-gray-600">Permanently delete your clinic account and all data</p>
-                    </div>
-                    <Button
-                      onClick={handleDeleteAccount}
-                      className="bg-red-600 text-white hover:bg-red-700 rounded-xl px-6 py-3 transition-all duration-200"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete Account
-                    </Button>
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200">
-                    <div>
-                      <p className="font-medium text-gray-900">Logout</p>
-                      <p className="text-sm text-gray-600">Sign out of your current session</p>
-                    </div>
-                    <Button
-                      onClick={handleLogout}
-                      className="bg-orange-500 text-white hover:bg-orange-600 rounded-xl px-6 py-3 transition-all duration-200"
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Logout
-                    </Button>
-                  </div>
-                </div>
-              </div>
+            
+            <div className="flex gap-3">
+              <Button 
+                onClick={handleDeleteAccount}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Account
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={handleLogout}
+                className="border-[#00555A] text-[#00555A] hover:bg-[#00555A] hover:text-white"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
             </div>
-          )}
+          </div>
         </div>
       </main>
     </div>

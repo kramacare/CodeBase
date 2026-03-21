@@ -4,13 +4,6 @@ import { usePatient } from "@/context/PatientContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { ArrowLeft, Phone, Lock, Trash2, User, LogOut } from "lucide-react";
 
 const PatientProfile = () => {
@@ -75,7 +68,7 @@ const PatientProfile = () => {
     localStorage.removeItem("krama_patient_profile");
     localStorage.removeItem("krama_active_appointment");
     localStorage.removeItem("krama_visit_history");
-    localStorage.removeItem("user"); // Also clear the logged-in user data
+    localStorage.removeItem("user");
     navigate("/");
   };
 
@@ -168,6 +161,10 @@ const PatientProfile = () => {
       return;
     }
 
+    if (!confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
+      return;
+    }
+
     try {
       const response = await fetch("http://localhost:8000/auth/patient/delete-account", {
         method: "DELETE",
@@ -181,16 +178,27 @@ const PatientProfile = () => {
 
       if (response.ok) {
         alert("Account deleted successfully!");
+        // Clear all localStorage data
         localStorage.clear();
+        // Redirect to landing page
         navigate("/");
       } else {
         const error = await response.json();
         alert(error.detail || "Failed to delete account");
       }
     } catch (error) {
+      console.error("Error deleting account:", error);
       alert("Network error. Please try again.");
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -275,7 +283,7 @@ const PatientProfile = () => {
               <Button 
                 onClick={handleChangePhone}
                 disabled={!phone}
-                className="w-full bg-blue-600 hover:bg-blue-700"
+                className="w-full bg-[#00555A] hover:bg-[#004455] text-white"
               >
                 Update Phone Number
               </Button>
@@ -300,7 +308,6 @@ const PatientProfile = () => {
                 <Input
                   id="current-pw"
                   type="password"
-                  placeholder="Enter current password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   className="mt-1"
@@ -311,7 +318,6 @@ const PatientProfile = () => {
                 <Input
                   id="new-pw"
                   type="password"
-                  placeholder="Enter new password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="mt-1"
@@ -322,7 +328,6 @@ const PatientProfile = () => {
                 <Input
                   id="confirm-pw"
                   type="password"
-                  placeholder="Confirm new password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="mt-1"
@@ -331,101 +336,59 @@ const PatientProfile = () => {
               <Button 
                 onClick={handleChangePassword}
                 disabled={!currentPassword || !newPassword || newPassword !== confirmPassword}
-                className="w-full bg-green-600 hover:bg-green-700"
+                className="w-full bg-[#00555A] hover:bg-[#004455] text-white"
               >
                 Change Password
               </Button>
             </div>
           </div>
 
-          {/* Logout */}
-          <div className="rounded-2xl bg-white shadow-lg p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100">
-                <LogOut className="h-6 w-6 text-yellow-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Logout</h2>
-                <p className="text-sm text-gray-500">Sign out of your account</p>
-              </div>
-            </div>
-            
-            <p className="text-gray-600 mb-4">
-              Sign out of your account and return to the home page. You can login again anytime.
-            </p>
-            <Button 
-              variant="outline"
-              onClick={handleLogout}
-              className="w-full border-yellow-600 text-yellow-600 hover:bg-yellow-50"
-            >
-              Logout
-            </Button>
-          </div>
-
           {/* Delete Account */}
-          <div className="rounded-2xl bg-white shadow-lg p-6 border-2 border-red-100">
+          <div className="rounded-2xl bg-white shadow-lg p-6 lg:col-span-2">
             <div className="flex items-center gap-3 mb-6">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
                 <Trash2 className="h-6 w-6 text-red-600" />
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">Delete Account</h2>
-                <p className="text-sm text-gray-500">Permanently remove your account</p>
+                <p className="text-sm text-gray-500">Permanently delete your account and all data</p>
               </div>
             </div>
             
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-red-800 text-sm">
-                <strong>Warning:</strong> This action cannot be undone. All your data including appointments, medical records, and account information will be permanently deleted.
-              </p>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="delete-pw" className="text-sm font-medium text-gray-700">Enter Password to Confirm</Label>
+                <Input
+                  id="delete-pw"
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex gap-3">
+                <Button 
+                  onClick={handleDeleteAccount}
+                  disabled={!deletePassword}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Account
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={handleLogout}
+                  className="border-[#00555A] text-[#00555A] hover:bg-[#00555A] hover:text-white"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
             </div>
-            <Button 
-              variant="destructive"
-              onClick={() => setDeleteDialogOpen(true)}
-              className="w-full bg-red-600 hover:bg-red-700"
-            >
-              Delete Account
-            </Button>
           </div>
         </div>
       </main>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-red-600">Delete Account</DialogTitle>
-            <DialogDescription>
-              Are you absolutely sure? This will permanently delete your account and all associated data.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            <div>
-              <Label htmlFor="delete-pw" className="text-sm font-medium">Enter your password to confirm</Label>
-              <Input
-                id="delete-pw"
-                type="password"
-                placeholder="Enter your password"
-                value={deletePassword}
-                onChange={(e) => setDeletePassword(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button 
-                variant="destructive" 
-                onClick={handleDeleteAccount}
-                disabled={!deletePassword}
-              >
-                Delete Forever
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

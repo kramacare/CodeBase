@@ -53,6 +53,12 @@ const ClinicLogin = () => {
         email: clinicId
       }));
 
+      // Also store clinic_id for profile access
+      if (data.clinic_id) {
+        localStorage.setItem("clinic_id", data.clinic_id);
+        console.log("Stored clinic_id:", data.clinic_id);
+      }
+
       // 🚀 Redirect to clinic dashboard immediately
       navigate("/clinic");
     } catch (err) {
