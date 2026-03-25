@@ -6,12 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthCard from "@/components/auth/AuthCard";
 
-import { Activity, Phone, Mail, Lock, ArrowRight } from "lucide-react";
+import { Activity, Mail, Lock, ArrowRight } from "lucide-react";
 
 const PatientLogin = () => {
   const navigate = useNavigate();
 
-  const [mode, setMode] = useState<"password" | "otp">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,11 +20,11 @@ const PatientLogin = () => {
     e.preventDefault();
 
     if (!email.trim()) {
-      setError("Please enter your email or phone number.");
+      setError("Please enter your email.");
       return;
     }
 
-    if (mode === "password" && !password.trim()) {
+    if (!password.trim()) {
       setError("Please enter your password.");
       return;
     }
@@ -52,14 +51,14 @@ const PatientLogin = () => {
         return;
       }
 
-      // Store user info in localStorage
-      localStorage.setItem("user", JSON.stringify({
+      const userData = {
         id: data.user_id,
         type: data.user_type,
-        email: email
-      }));
+        email: email,
+        name: data.patient_data?.name || email.split('@')[0]
+      };
+      localStorage.setItem("user", JSON.stringify(userData));
 
-      // ✅ Redirect to patient dashboard immediately
       navigate("/patient");
     } catch (err) {
       setError("Network error. Please try again.");
@@ -79,8 +78,7 @@ const PatientLogin = () => {
               Krama
             </h2>
             <p className="mt-3 text-muted-foreground">
-              Skip the wait. Book clinic appointments and track your queue in
-              real time.
+              Skip the wait. Book clinic appointments and track your queue in real time.
             </p>
           </div>
         </div>
@@ -105,7 +103,7 @@ const PatientLogin = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email">Phone Number / Email</Label>
+                <Label htmlFor="email">Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -118,56 +116,35 @@ const PatientLogin = () => {
                 </div>
               </div>
 
-              {mode === "password" && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
-                    <button
-                      type="button"
-                      className="text-xs text-primary hover:underline"
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <button
+                    type="button"
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </button>
                 </div>
-              )}
+
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
 
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Logging in..." : (mode === "otp" ? "Send OTP" : "Login")}
+                {loading ? "Logging in..." : "Login"}
                 <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
             </form>
-
-            <div className="mt-4 text-center">
-              <button
-                type="button"
-                onClick={() =>
-                  setMode(mode === "password" ? "otp" : "password")
-                }
-                className="text-sm text-primary hover:underline"
-              >
-                {mode === "password" ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Phone className="h-3.5 w-3.5" />
-                    Login with OTP
-                  </span>
-                ) : (
-                  "Login with Password"
-                )}
-              </button>
-            </div>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               New user?{" "}

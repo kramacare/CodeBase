@@ -34,7 +34,7 @@ const PatientDashboard = () => {
   const fetchPatientToken = async (patientEmail: string) => {
     try {
       // Try to find patient's token by their email/phone
-      const response = await fetch(`http://localhost:8000/queue/patient-dashboard/${PatientEmail}?clinic_id=ALL`);
+      const response = await fetch(`http://localhost:8000/queue/patient-dashboard/${patientEmail}?clinic_id=ALL`);
       if (response.ok) {
         const data = await response.json();
         if (data.your_token) {
@@ -82,13 +82,22 @@ const PatientDashboard = () => {
         </div>
 
         {/* Two main options */}
-        <div className="grid gap-4 sm:grid-cols-2 mb-8">
+        <div className="grid gap-4 sm:grid-cols-3 mb-8">
           <Link to="/patient/find-clinics">
             <div className="rounded-xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md flex flex-col items-center text-center min-h-[140px] justify-center">
               <CalendarCheck className="h-10 w-10 text-[#00555A] mb-3" />
               <h3 className="font-semibold text-foreground">Book appointment</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Find clinics by location and book
+              </p>
+            </div>
+          </Link>
+          <Link to="/confirmation">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md flex flex-col items-center text-center min-h-[140px] justify-center">
+              <Hash className="h-10 w-10 text-[#00555A] mb-3" />
+              <h3 className="font-semibold text-foreground">My appointments</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                View your appointment tokens
               </p>
             </div>
           </Link>

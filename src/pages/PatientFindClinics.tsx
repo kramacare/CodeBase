@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import SearchBar from "@/components/shared/SearchBar";
 import ClinicCard from "@/components/shared/ClinicCard";
 import LocationAccessCard from "@/components/shared/LocationAccessCard";
-import { mockClinics } from "@/data/mockData";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -13,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowLeft } from "lucide-react";
+import type { Clinic } from "@/data/mockData";
 
 const medicalCategories: Record<
   string,
@@ -72,6 +72,26 @@ const PatientFindClinics = () => {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [loading, setLoading] = useState(false);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
+
+  // Fetch clinics from backend
+  useEffect(() => {
+    const fetchClinics = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/auth/clinics/list");
+        if (response.ok) {
+          const data = await response.json();
+          setClinics(data.clinics);
+        } else {
+          console.error("Failed to fetch clinics");
+        }
+      } catch (error) {
+        console.error("Error fetching clinics:", error);
+      }
+    };
+
+    fetchClinics();
+  }, []);
 
   const handleGPS = () => {
     setLocationLoading(true);
@@ -108,7 +128,7 @@ const PatientFindClinics = () => {
     setTimeout(() => setLoading(false), 1200);
   };
 
-  const filtered = mockClinics.filter((c) => {
+  const filtered = clinics.filter((c) => {
     const matchesSearch =
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.address.toLowerCase().includes(search.toLowerCase()) ||
@@ -118,14 +138,13 @@ const PatientFindClinics = () => {
       c.specializations.some((s) =>
         s.toLowerCase().includes(search.toLowerCase())
       );
+
     const matchesCategory =
       selectedCategory === "all" ||
       c.specializations.some((s) =>
         s.toLowerCase().includes(selectedCategory.toLowerCase())
-      ) ||
-      c.doctors.some((d) =>
-        d.specialization.toLowerCase().includes(selectedCategory.toLowerCase())
       );
+
     return matchesSearch && matchesCategory;
   });
 

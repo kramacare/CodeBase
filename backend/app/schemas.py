@@ -31,6 +31,7 @@ class AuthResponse(BaseModel):
     message: str
     user_type: Optional[str] = None
     clinic_id: Optional[str] = None
+    patient_data: Optional[dict] = None
 
 class ErrorResponse(BaseModel):
     error: str
@@ -47,5 +48,25 @@ class ChangePhoneRequest(BaseModel):
 
 class DeleteAccountRequest(BaseModel):
     password: str
-    confirmation: str  # Must be "DELETE" to confirm
+    confirmation: str = "DELETE"
     patient_email: str
+
+# Appointment Schemas
+class AppointmentCreateRequest(BaseModel):
+    patient_name: str
+    patient_email: str
+    patient_phone: Optional[str] = ""
+    clinic_id: str
+    clinic_name: str
+    doctor_name: str
+    date: str
+    time: str
+    status: str = "booked"
+
+    class Config:
+        extra = "allow"  # Allow extra fields
+
+class AppointmentResponse(BaseModel):
+    message: str
+    appointment_id: int
+    token: str
