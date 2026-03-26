@@ -36,6 +36,24 @@ class AuthResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
 
+# OTP Schemas
+class SendOTPRequest(BaseModel):
+    email: EmailStr
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp_code: str
+
+class OTPResponse(BaseModel):
+    message: str
+    success: bool
+    expires_in: int  # seconds
+
+class OTPVerifyResponse(BaseModel):
+    message: str
+    success: bool
+    verified: bool
+
 # Profile Management Schemas
 class ChangePasswordRequest(BaseModel):
     current_password: str

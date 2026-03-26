@@ -7,14 +7,13 @@ from app.routers import auth
 
 app = FastAPI(title="Clinic Authentication API", version="1.0.0")
 
+# CORS middleware - allow all origins for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080", "http://localhost:3000", "http://localhost:8001", "*"],
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=600
 )
 
 app.include_router(auth.router)
