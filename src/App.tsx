@@ -23,6 +23,9 @@ import LiveQueue from "./pages/LiveQueue";
 import PatientLogin from "./pages/PatientLogin";
 import PatientSignup from "./pages/PatientSignup";
 import OTPVerification from "./pages/OTPVerification";
+import PatientForgotPassword from "./pages/PatientForgotPassword";
+import PatientVerifyResetOTP from "./pages/PatientVerifyResetOTP";
+import PatientResetPassword from "./pages/PatientResetPassword";
 import ClinicLogin from "./pages/ClinicLogin";
 import ClinicSignup from "./pages/ClinicSignup";
 import ClinicRegistrationSuccess from "./pages/ClinicRegistrationSuccess";
@@ -45,6 +48,9 @@ function App() {
             <Route path="/patient/login" element={<MainLayout><PatientLogin /></MainLayout>} />
             <Route path="/patient/signup" element={<MainLayout><PatientSignup /></MainLayout>} />
             <Route path="/patient/verify-otp" element={<MainLayout><OTPVerification /></MainLayout>} />
+            <Route path="/patient/forgot-password" element={<MainLayout><PatientForgotPassword /></MainLayout>} />
+            <Route path="/patient/verify-reset-otp" element={<MainLayout><PatientVerifyResetOTP /></MainLayout>} />
+            <Route path="/patient/reset-password" element={<MainLayout><PatientResetPassword /></MainLayout>} />
 
             {/* Clinic Auth with Header */}
             <Route path="/clinic/login" element={<MainLayout><ClinicLogin /></MainLayout>} />

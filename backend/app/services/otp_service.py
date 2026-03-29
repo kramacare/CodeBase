@@ -278,6 +278,123 @@ class OTPService:
         otp_record = result.scalar_one_or_none()
         return otp_record is not None and otp_record.is_verified
 
+    async def create_otp_for_password_reset(self, email: str, db: AsyncSession) -> tuple[bool, str]:
+        """
+        Create OTP for password reset.
+        
+        Args:
+            email: User email
+            db: Database session
+            
+        Returns:
+            tuple[bool, str]: Success status and message
+        """
+        try:
+            # Check if there's an existing OTP that hasn't expired
+            result = await db.execute(
+                select(OTPVerification).where(OTPVerification.email == email)
+            )
+            existing_otp = result.scalar_one_or_none()
+            
+            # Delete existing OTP if any
+            if existing_otp:
+                await db.delete(existing_otp)
+                await db.commit()
+            
+            # Generate new OTP
+            otp_code = self.generate_otp()
+            expires_at = datetime.utcnow() + timedelta(minutes=self.OTP_EXPIRY_MINUTES)
+            
+            # Create OTP record without user data (password reset doesn't need it)
+            otp_record = OTPVerification(
+                email=email,
+                otp_code=self.hash_otp(otp_code),
+                expires_at=expires_at,
+                is_verified=False,
+                attempt_count=0,
+                user_name="",  # Not needed for password reset
+                user_password="",  # Not needed for password reset
+                user_phone=""  # Not needed for password reset
+            )
+            
+            db.add(otp_record)
+            await db.commit()
+            
+            # Send OTP email
+            from app.services.email_service import send_otp
+            email_sent = send_otp(email, otp_code)
+            
+            if email_sent:
+                logger.info(f"Password reset OTP sent to {email}")
+                return True, "OTP sent to your email"
+            else:
+                await db.delete(otp_record)
+                await db.commit()
+                return False, "Failed to send OTP. Please try again."
+                
+        except Exception as e:
+            logger.error(f"Error creating password reset OTP: {e}")
+            await db.rollback()
+            return False, "Failed to generate OTP. Please try again."
+
+    async def verify_password_reset_otp(self, email: str, provided_otp: str, db: AsyncSession) -> tuple[bool, str]:
+        """
+        Verify OTP for password reset.
+        
+        Args:
+            email: User email
+            provided_otp: OTP provided by user
+            db: Database session
+            
+        Returns:
+            tuple[bool, str]: Success status and message
+        """
+        try:
+            result = await db.execute(
+                select(OTPVerification).where(OTPVerification.email == email)
+            )
+            otp_record = result.scalar_one_or_none()
+            
+            if not otp_record:
+                return False, "Invalid OTP. Please request a new one."
+            
+            # Check expiry
+            if datetime.utcnow() > otp_record.expires_at:
+                await db.delete(otp_record)
+                await db.commit()
+                return False, "OTP has expired. Please request a new one."
+            
+            # Check attempts
+            if otp_record.attempt_count >= self.MAX_ATTEMPTS:
+                await db.delete(otp_record)
+                await db.commit()
+                return False, "Too many failed attempts. Please request a new OTP."
+            
+            # Increment attempt count
+            otp_record.attempt_count += 1
+            await db.commit()
+            
+            # Verify OTP
+            if self.verify_otp_hash(otp_record.otp_code, provided_otp):
+                # Mark as verified and delete
+                await db.delete(otp_record)
+                await db.commit()
+                logger.info(f"Password reset OTP verified for {email}")
+                return True, "OTP verified successfully"
+            else:
+                remaining_attempts = self.MAX_ATTEMPTS - otp_record.attempt_count
+                if remaining_attempts > 0:
+                    return False, f"Invalid OTP. {remaining_attempts} attempts remaining."
+                else:
+                    await db.delete(otp_record)
+                    await db.commit()
+                    return False, "Too many failed attempts. Please request a new OTP."
+                    
+        except Exception as e:
+            logger.error(f"Error verifying password reset OTP: {e}")
+            await db.rollback()
+            return False, "Failed to verify OTP. Please try again."
+
 
 # Singleton instance
 otp_service = OTPService()
