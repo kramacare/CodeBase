@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,14 @@ const ClinicLogin = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +64,6 @@ const ClinicLogin = () => {
       // Also store clinic_id for profile access
       if (data.clinic_id) {
         localStorage.setItem("clinic_id", data.clinic_id);
-        console.log("Stored clinic_id:", data.clinic_id);
       }
 
       // 🚀 Redirect to clinic dashboard immediately
@@ -88,6 +95,12 @@ const ClinicLogin = () => {
           {error && (
             <div className="mb-4 rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
               {error}
+            </div>
+          )}
+
+          {message && (
+            <div className={`mb-4 rounded-lg px-4 py-2 text-sm ${message.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+              {message.text}
             </div>
           )}
 

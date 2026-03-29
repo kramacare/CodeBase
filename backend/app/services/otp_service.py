@@ -1,5 +1,7 @@
 import secrets
 import hashlib
+import random
+import string
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 import logging
@@ -12,6 +14,13 @@ from app.database.models import OTPVerification, Patient
 from app.services.email_service import send_otp as send_otp_email
 
 logger = logging.getLogger(__name__)
+
+
+def generate_patient_id():
+    """Generate unique patient ID like PA-7X9K2M4"""
+    letters = ''.join(random.choices(string.ascii_uppercase, k=2))
+    alphanumeric = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    return f"PA-{letters}{alphanumeric}"
 
 
 class OTPService:
@@ -188,7 +197,11 @@ class OTPService:
         if OTPService.verify_otp_hash(otp_record.otp_code, provided_otp):
             # OTP valid - create patient account from stored data
             try:
+                # Generate unique patient_id
+                patient_id = generate_patient_id()
+                
                 new_patient = Patient(
+                    patient_id=patient_id,
                     name=otp_record.user_name,
                     email=otp_record.email,
                     password=otp_record.user_password,

@@ -15,6 +15,14 @@ const TrackQueue = () => {
   const { state } = useLocation();
   const [queuePosition, setQueuePosition] = useState<QueuePosition | null>(null);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   const {
     clinic = "CityCare Clinic",
@@ -52,7 +60,7 @@ const TrackQueue = () => {
           }
         }
       } catch (error) {
-        console.error("Error fetching queue position:", error);
+        setMessage({text: "Error fetching queue position", type: "error"});
       } finally {
         setLoading(false);
       }

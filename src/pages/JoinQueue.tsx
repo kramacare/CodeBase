@@ -1,19 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import MainLayout from "@/components/layout/MainLayout";
 
 const JoinQueue = () => {
   const navigate = useNavigate();
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
 
   const [name, setName] = useState("");
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
   const [selectedClinicId, setSelectedClinicId] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
 
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
+
   const handleJoinQueue = async () => {
     if (!name.trim() || !selectedDoctorId || !selectedClinicId || !selectedCategoryId) {
-      alert("Please fill all fields");
+      setMessage({text: "Please fill all fields", type: "error"});
       return;
     }
 
@@ -33,7 +41,6 @@ const JoinQueue = () => {
       });
 
       const data = await res.json();
-      console.log("TOKEN CREATED:", data);
 
       navigate("/track", {
         state: {
@@ -43,13 +50,19 @@ const JoinQueue = () => {
       });
 
     } catch (err) {
-      console.error("Failed to join queue:", err);
-      alert("Failed to join queue");
+      setMessage({text: "Failed to join queue", type: "error"});
     }
   };
 
   return (
     <MainLayout>
+      {message && (
+        <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-lg ${
+          message.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+        }`}>
+          {message.text}
+        </div>
+      )}
       <div className="flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm">
           <h1 className="text-xl font-semibold text-center text-[#0F172A] mb-8">Join Queue</h1>

@@ -73,6 +73,14 @@ const PatientFindClinics = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [loading, setLoading] = useState(false);
   const [clinics, setClinics] = useState<Clinic[]>([]);
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   // Fetch clinics from backend
   useEffect(() => {
@@ -81,12 +89,24 @@ const PatientFindClinics = () => {
         const response = await fetch("http://localhost:8000/auth/clinics/list");
         if (response.ok) {
           const data = await response.json();
-          setClinics(data.clinics);
+          // Transform backend data to match Clinic type
+          const transformedClinics = data.clinics.map((clinic: any) => ({
+            id: clinic.clinic_id,
+            name: clinic.clinic_name,
+            address: clinic.address,
+            phone: clinic.phone,
+            doctors: clinic.doctors || [{ name: clinic.doctor_name || "Available Doctor" }],
+            specializations: clinic.specializations || ["general"],
+            rating: clinic.rating || 4.5,
+            wait_time: clinic.wait_time || "15-30 min",
+            distance: clinic.distance || "2.5 km"
+          }));
+          setClinics(transformedClinics);
         } else {
-          console.error("Failed to fetch clinics");
+          setMessage({text: "Failed to fetch clinics", type: "error"});
         }
       } catch (error) {
-        console.error("Error fetching clinics:", error);
+        setMessage({text: "Error fetching clinics", type: "error"});
       }
     };
 

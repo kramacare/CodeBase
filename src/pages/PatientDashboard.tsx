@@ -19,6 +19,14 @@ const PatientDashboard = () => {
   const { currentToken, queueStats, fetchQueueStats } = useQueue();
   const [patientToken, setPatientToken] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   useEffect(() => {
     // Get logged-in patient's email to fetch their token
@@ -52,7 +60,7 @@ const PatientDashboard = () => {
         }
       }
     } catch (error) {
-      console.error("Failed to fetch patient token:", error);
+      setMessage({text: "Failed to fetch patient token", type: "error"});
     } finally {
       setLoading(false);
     }

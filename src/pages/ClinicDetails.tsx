@@ -11,6 +11,14 @@ const ClinicDetails = () => {
   const [showTimeSelection, setShowTimeSelection] = useState(false);
   const [selectedTime, setSelectedTime] = useState("");
   const [booking, setBooking] = useState(false);
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   useEffect(() => {
     const fetchClinicData = async () => {
@@ -20,10 +28,10 @@ const ClinicDetails = () => {
           const data = await response.json();
           setClinic(data);
         } else {
-          console.error("Failed to fetch clinic data");
+          setMessage({text: "Failed to fetch clinic data", type: "error"});
         }
       } catch (error) {
-        console.error("Error fetching clinic data:", error);
+        setMessage({text: "Network error. Please try again.", type: "error"});
       } finally {
         setLoading(false);
       }
@@ -44,7 +52,7 @@ const ClinicDetails = () => {
 
   const handleBookClick = () => {
     if (!localStorage.getItem("user")) {
-      alert("Please login to book appointment");
+      setMessage({text: "Please login to book appointment", type: "error"});
       navigate("/patient/login");
       return;
     }
@@ -53,7 +61,7 @@ const ClinicDetails = () => {
 
   const handleConfirmBooking = async () => {
     if (!selectedTime) {
-      alert("Please select a time");
+      setMessage({text: "Please select a time", type: "error"});
       return;
     }
 
@@ -63,22 +71,35 @@ const ClinicDetails = () => {
       const user = JSON.parse(userStr);
       const today = new Date().toISOString().split('T')[0];
 
-      // Generate a proper clinic_id if not available
-      const clinicId = clinic.clinic_id || `CL${Date.now()}`;
+      const clinicId = clinic.clinic_id || id;
+      
+      // If patient_id is missing, fetch from patient data
+      let patientId = user.patient_id;
+      let patientPhone = user.phone;
+      
+      if (!patientId || !patientPhone) {
+        try {
+          const patientDataResponse = await fetch(`http://localhost:8000/auth/patient/data?email=${user.email}`);
+          if (patientDataResponse.ok) {
+            const patientData = await patientDataResponse.json();
+            patientId = patientData.patient_id;
+            patientPhone = patientData.phone;
+          }
+        } catch (e) {
+          console.error("Failed to fetch patient data:", e);
+        }
+      }
 
       const requestData = {
+        patient_id: patientId || "P-GUEST",
         patient_name: user.name || user.email?.split('@')[0] || "Patient",
         patient_email: user.email || "",
-        patient_phone: user.phone || "",
+        patient_phone: patientPhone || "",
         clinic_id: clinicId,
-        clinic_name: clinic.clinic_name || "Unknown Clinic",
         doctor_name: clinic.doctor_name || "General",
         date: today,
-        time: selectedTime || "10:00",
-        status: "booked"
+        time: selectedTime || "10:00"
       };
-
-      console.log("Booking appointment:", JSON.stringify(requestData, null, 2));
 
       const response = await fetch("http://localhost:8000/auth/appointments/create", {
         method: "POST",
@@ -89,7 +110,6 @@ const ClinicDetails = () => {
       });
 
       const data = await response.json();
-      console.log("Booking response:", response.status, data);
 
       if (response.ok) {
         navigate("/confirmation", {
@@ -99,15 +119,17 @@ const ClinicDetails = () => {
             date: today,
             time: selectedTime,
             address: clinic.address,
-            token: data.token || `T-${Math.floor(Math.random() * 900 + 100)}`
+            token: data.token,
+            patient_name: requestData.patient_name,
+            patient_phone: requestData.patient_phone,
+            patient_email: requestData.patient_email
           }
         });
       } else {
-        alert(`Failed to book: ${data.detail || JSON.stringify(data)}`);
+        setMessage({text: `Failed to book: ${data.detail || JSON.stringify(data)}`, type: "error"});
       }
     } catch (error) {
-      console.error("Error booking appointment:", error);
-      alert("Failed to book appointment. Please try again.");
+      setMessage({text: "Failed to book appointment. Please try again.", type: "error"});
     } finally {
       setBooking(false);
     }
@@ -145,6 +167,15 @@ const ClinicDetails = () => {
           </span>
         </div>
       </header>
+
+      {/* Message Toast */}
+      {message && (
+        <div className={`fixed top-16 right-4 z-50 px-6 py-3 rounded-lg shadow-lg animate-fade-in ${
+          message.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+        }`}>
+          {message.text}
+        </div>
+      )}
 
       <main className="mx-auto max-w-3xl px-4 py-8">
         {!showTimeSelection ? (

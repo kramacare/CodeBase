@@ -55,7 +55,8 @@ const PatientLogin = () => {
         id: data.user_id,
         type: data.user_type,
         email: email,
-        name: data.patient_data?.name || email.split('@')[0]
+        name: data.patient_data?.name || email.split('@')[0],
+        patient_id: data.patient_data?.patient_id || null
       };
       localStorage.setItem("user", JSON.stringify(userData));
 

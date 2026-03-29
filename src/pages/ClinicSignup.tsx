@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,39 +19,32 @@ const ClinicSignup = () => {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   const update = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    console.log("Form submitted with data:", form);
-    
     if (!form.clinic_name || !form.email || !form.password || !form.phone || !form.address) {
-      console.log("Validation failed - missing required fields");
       return setError("Please fill all required fields.");
     }
     
     if (form.password !== form.confirm) {
-      console.log("Password mismatch");
       return setError("Passwords do not match.");
     }
     
-    console.log("Validation passed, sending request...");
     setError("");
     setLoading(true);
 
     try {
-      console.log("Sending request to:", "http://localhost:8000/auth/clinic/signup");
-      console.log("Request body:", {
-        clinic_name: form.clinic_name,
-        email: form.email,
-        password: form.password,
-        phone: form.phone,
-        address: form.address,
-        doctor_name: form.doctor_name
-      });
-      
       const response = await fetch("http://localhost:8000/auth/clinic/signup", {
         method: "POST",
         headers: {
@@ -67,9 +60,6 @@ const ClinicSignup = () => {
         }),
       });
 
-      console.log("Response status:", response.status);
-      console.log("Response headers:", response.headers);
-
       const data = await response.json();
 
       if (!response.ok) {
@@ -77,7 +67,6 @@ const ClinicSignup = () => {
         return;
       }
 
-      // Navigate to success page with registration data
       const registrationData = {
         clinic_name: form.clinic_name,
         email: form.email,
@@ -86,7 +75,6 @@ const ClinicSignup = () => {
         doctor_name: form.doctor_name
       };
 
-      // Navigate to success page with registration data
       navigate("/clinic/register/success", { state: { data: registrationData } });
     } catch (err) {
       setError("Network error. Please try again.");
@@ -109,6 +97,12 @@ const ClinicSignup = () => {
           {error && (
             <div className="mb-4 rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
               {error}
+            </div>
+          )}
+
+          {message && (
+            <div className={`mb-4 rounded-lg px-4 py-2 text-sm ${message.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+              {message.text}
             </div>
           )}
 

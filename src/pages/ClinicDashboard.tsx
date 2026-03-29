@@ -7,6 +7,7 @@ import { useQueue } from "@/context/QueueContext";
 const ClinicDashboard = () => {
   const [name, setName] = useState("");
   const [clinicProfile, setClinicProfile] = useState<any>(null);
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
   const {
     queue,
     nextPatient,
@@ -18,12 +19,19 @@ const ClinicDashboard = () => {
     totalToday,
   } = useQueue();
 
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
+
   // Get clinic ID from localStorage
   const getClinicId = () => {
     try {
       return localStorage.getItem("clinic_id");
     } catch (error) {
-      console.error("Error getting clinic_id:", error);
+      setMessage({text: "Error getting clinic_id", type: "error"});
       return null;
     }
   };
@@ -41,7 +49,7 @@ const ClinicDashboard = () => {
           setClinicProfile(data);
         }
       } catch (error) {
-        console.error("Error fetching clinic data:", error);
+        setMessage({text: "Error fetching clinic data", type: "error"});
       }
     };
 
