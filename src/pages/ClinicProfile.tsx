@@ -10,6 +10,9 @@ const ClinicProfile = () => {
   const [dbProfile, setDbProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   
+  // Message state
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+
   // Get the actual logged-in clinic ID from localStorage
   const getLoggedInClinicId = () => {
     try {
@@ -31,11 +34,19 @@ const ClinicProfile = () => {
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  // Auto-hide message after 5 seconds
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
+
   // Fetch clinic data from database
   useEffect(() => {
     const fetchClinicData = async () => {
       if (!loggedInClinicId) {
-        console.error("No logged-in clinic found");
+        setMessage({text: "No logged-in clinic found", type: "error"});
         setLoading(false);
         return;
       }
@@ -45,14 +56,13 @@ const ClinicProfile = () => {
         
         if (response.ok) {
           const data = await response.json();
-          console.log("Clinic data received:", data);
           setDbProfile(data);
           setPhone(data.phone || "");
         } else {
-          console.error("Failed to fetch clinic data:", response.status);
+          setMessage({text: "Failed to fetch clinic data", type: "error"});
         }
       } catch (error) {
-        console.error("Failed to fetch clinic data:", error);
+        setMessage({text: "Network error. Please try again.", type: "error"});
       } finally {
         setLoading(false);
       }
@@ -67,7 +77,7 @@ const ClinicProfile = () => {
 
   const handleChangePhone = async () => {
     if (!loggedInClinicId) {
-      alert("No logged-in clinic found");
+      setMessage({text: "No logged-in clinic found", type: "error"});
       return;
     }
 
@@ -82,8 +92,7 @@ const ClinicProfile = () => {
       });
 
       if (response.ok) {
-        alert("Phone number updated successfully!");
-        // Refresh data to show updated phone
+        setMessage({text: "Phone number updated successfully!", type: "success"});
         const fetchUpdatedData = async () => {
           try {
             const dataResponse = await fetch(`http://localhost:8000/auth/clinic/data?clinic_id=${loggedInClinicId}`);
@@ -99,21 +108,21 @@ const ClinicProfile = () => {
         fetchUpdatedData();
       } else {
         const error = await response.json();
-        alert(error.detail || "Failed to update phone number");
+        setMessage({text: error.detail || "Failed to update phone number", type: "error"});
       }
     } catch (error) {
-      alert("Network error. Please try again.");
+      setMessage({text: "Network error. Please try again.", type: "error"});
     }
   };
 
   const handleChangePassword = async () => {
     if (!loggedInClinicId) {
-      alert("No logged-in clinic found");
+      setMessage({text: "No logged-in clinic found", type: "error"});
       return;
     }
 
     if (!currentPassword || !newPassword || newPassword !== confirmPassword) {
-      alert("Please fill all password fields correctly");
+      setMessage({text: "Please fill all password fields correctly", type: "error"});
       return;
     }
 
@@ -129,29 +138,28 @@ const ClinicProfile = () => {
       });
 
       if (response.ok) {
-        alert("Password changed successfully!");
-        // Clear password fields
+        setMessage({text: "Password changed successfully!", type: "success"});
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
       } else {
         const error = await response.json();
-        alert(error.detail || "Failed to change password");
+        setMessage({text: error.detail || "Failed to change password", type: "error"});
       }
     } catch (error) {
-      alert("Network error. Please try again.");
+      setMessage({text: "Network error. Please try again.", type: "error"});
     }
   };
 
   const handleDeleteAccount = async () => {
     if (!loggedInClinicId) {
-      alert("No logged-in clinic found");
+      setMessage({text: "No logged-in clinic found", type: "error"});
       return;
     }
 
     const password = prompt("Enter your password to delete account:");
     if (!password) {
-      alert("Password required to delete account");
+      setMessage({text: "Password required to delete account", type: "error"});
       return;
     }
 
@@ -169,15 +177,14 @@ const ClinicProfile = () => {
       });
 
       if (response.ok) {
-        alert("Account deleted successfully");
+        setMessage({text: "Account deleted successfully", type: "success"});
         localStorage.clear();
         navigate("/clinic/login");
       } else {
-        alert("Failed to delete account");
+        setMessage({text: "Failed to delete account", type: "error"});
       }
     } catch (error) {
-      console.error("Error deleting account:", error);
-      alert("Error deleting account");
+      setMessage({text: "Error deleting account", type: "error"});
     }
   };
 
@@ -211,6 +218,15 @@ const ClinicProfile = () => {
           <span className="font-semibold text-gray-900">Clinic Profile Settings</span>
         </div>
       </header>
+
+      {/* Message Toast */}
+      {message && (
+        <div className={`fixed top-20 right-4 z-50 px-6 py-3 rounded-lg shadow-lg animate-fade-in ${
+          message.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+        }`}>
+          {message.text}
+        </div>
+      )}
 
       <main className="mx-auto max-w-4xl px-4 py-8">
         {/* Profile Info Card */}

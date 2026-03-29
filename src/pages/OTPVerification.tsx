@@ -15,6 +15,14 @@ const OTPVerification = () => {
   const [success, setSuccess] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   useEffect(() => {
     // Get email from location state or localStorage
@@ -77,7 +85,6 @@ const OTPVerification = () => {
       }
     } catch (err) {
       setError("Network error. Please try again.");
-      console.error("OTP verification error:", err);
     } finally {
       setLoading(false);
     }
@@ -106,7 +113,7 @@ const OTPVerification = () => {
         setCountdown(60); // 60 seconds cooldown
         setOtp("");
         setError("");
-        alert("OTP sent successfully!");
+        setMessage({text: "OTP sent successfully!", type: "success"});
       } else {
         setError(data.detail || "Failed to resend OTP");
       }

@@ -11,6 +11,9 @@ interface ConfirmationState {
   time: string;
   address: string;
   token: string;
+  patient_name?: string;
+  patient_email?: string;
+  patient_phone?: string;
 }
 
 interface AppointmentDetails {
@@ -42,6 +45,14 @@ const AppointmentConfirmation = () => {
   const [appointmentDetails, setAppointmentDetails] = useState<AppointmentDetails | null>(null);
   const [queuePosition, setQueuePosition] = useState<QueuePosition | null>(null);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   useEffect(() => {
     const fetchAppointmentDetails = async () => {
@@ -72,7 +83,7 @@ const AppointmentConfirmation = () => {
           }
         }
       } catch (error) {
-        console.error("Error fetching appointment details:", error);
+        setMessage({text: "Error fetching appointment details", type: "error"});
       } finally {
         setLoading(false);
       }
@@ -127,6 +138,11 @@ const AppointmentConfirmation = () => {
 
   // Use state data if available, otherwise use appointmentDetails from API
   const displayData = state || appointmentDetails;
+  
+  // Helper to safely get clinic name
+  const getClinicName = () => state?.clinic || appointmentDetails?.clinic_name || "Unknown Clinic";
+  const getClinicAddress = () => state?.address || "Clinic Address";
+  const getDoctorName = () => state?.doctor || appointmentDetails?.doctor_name || "Available Doctor";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-secondary/30 px-4 py-12">
@@ -154,14 +170,14 @@ const AppointmentConfirmation = () => {
         </div>
 
         <div className="mt-6 space-y-3">
-          {/* Patient Info */}
-          {appointmentDetails && (
+          {/* Patient Info - From state or API */}
+          {(state?.patient_name || appointmentDetails?.patient_name) && (
             <div className="flex items-start gap-3 rounded-lg bg-blue-50 p-3">
               <div className="flex-1">
-                <dt className="text-xs text-muted-foreground">Patient</dt>
-                <dd className="font-medium text-foreground">{appointmentDetails.patient_name}</dd>
-                <dd className="text-xs text-muted-foreground">{appointmentDetails.patient_email}</dd>
-                <dd className="text-xs text-muted-foreground">{appointmentDetails.patient_phone}</dd>
+                <p className="text-xs text-muted-foreground">Patient</p>
+                <p className="font-medium text-foreground">{state?.patient_name || appointmentDetails?.patient_name}</p>
+                <p className="text-xs text-muted-foreground">{state?.patient_email || appointmentDetails?.patient_email}</p>
+                <p className="text-xs text-muted-foreground">{state?.patient_phone || appointmentDetails?.patient_phone}</p>
               </div>
             </div>
           )}
@@ -170,10 +186,10 @@ const AppointmentConfirmation = () => {
           <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
             <CalendarDays className="mt-0.5 h-5 w-5 shrink-0 text-[#00555A]" />
             <div>
-              <dt className="text-xs text-muted-foreground">Date & Time</dt>
-              <dd className="font-medium text-foreground">
+              <p className="text-xs text-muted-foreground">Date & Time</p>
+              <p className="font-medium text-foreground">
                 {displayData?.date || appointmentDetails?.date} at {displayData?.time || appointmentDetails?.time}
-              </dd>
+              </p>
             </div>
           </div>
 
@@ -181,9 +197,9 @@ const AppointmentConfirmation = () => {
           <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
             <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-[#00555A]" />
             <div>
-              <dt className="text-xs text-muted-foreground">Clinic</dt>
-              <dd className="font-medium text-foreground">{displayData?.clinic || appointmentDetails?.clinic_name}</dd>
-              <dd className="text-xs text-muted-foreground">{displayData?.address || "Clinic Address"}</dd>
+              <p className="text-xs text-muted-foreground">Clinic</p>
+              <p className="font-medium text-foreground">{getClinicName()}</p>
+              <p className="text-xs text-muted-foreground">{getClinicAddress()}</p>
             </div>
           </div>
 
@@ -191,8 +207,8 @@ const AppointmentConfirmation = () => {
           <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
             <Clock className="mt-0.5 h-5 w-5 shrink-0 text-[#00555A]" />
             <div>
-              <dt className="text-xs text-muted-foreground">Doctor</dt>
-              <dd className="font-medium text-foreground">{displayData?.doctor || appointmentDetails?.doctor_name}</dd>
+              <p className="text-xs text-muted-foreground">Doctor</p>
+              <p className="font-medium text-foreground">{getDoctorName()}</p>
             </div>
           </div>
 
@@ -201,8 +217,8 @@ const AppointmentConfirmation = () => {
             <div className="flex items-start gap-3 rounded-lg bg-orange-50 p-3">
               <Users className="mt-0.5 h-5 w-5 shrink-0 text-orange-500" />
               <div>
-                <dt className="text-xs text-muted-foreground">Patients Ahead</dt>
-                <dd className="font-medium text-foreground">{queuePosition.patients_ahead} patients</dd>
+                <p className="text-xs text-muted-foreground">Patients Ahead</p>
+                <p className="font-medium text-foreground">{queuePosition.patients_ahead} patients</p>
               </div>
             </div>
           )}
@@ -212,8 +228,8 @@ const AppointmentConfirmation = () => {
             <div className="flex items-start gap-3 rounded-lg bg-green-50 p-3">
               <Timer className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
               <div>
-                <dt className="text-xs text-muted-foreground">Estimated Wait</dt>
-                <dd className="font-medium text-foreground">{queuePosition.estimated_wait_minutes} minutes</dd>
+                <p className="text-xs text-muted-foreground">Estimated Wait</p>
+                <p className="font-medium text-foreground">{queuePosition.estimated_wait_minutes} minutes</p>
               </div>
             </div>
           )}
@@ -223,8 +239,8 @@ const AppointmentConfirmation = () => {
             <div className="flex items-start gap-3 rounded-lg bg-purple-50 p-3">
               <Hash className="mt-0.5 h-5 w-5 shrink-0 text-purple-500" />
               <div>
-                <dt className="text-xs text-muted-foreground">Your Position in Queue</dt>
-                <dd className="font-medium text-foreground">{queuePosition.your_position} of {queuePosition.total_in_queue}</dd>
+                <p className="text-xs text-muted-foreground">Your Position in Queue</p>
+                <p className="font-medium text-foreground">{queuePosition.your_position} of {queuePosition.total_in_queue}</p>
               </div>
             </div>
           )}
@@ -233,10 +249,10 @@ const AppointmentConfirmation = () => {
           <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
             <div>
-              <dt className="text-xs text-muted-foreground">Status</dt>
-              <dd className="font-medium text-foreground capitalize">
+              <p className="text-xs text-muted-foreground">Status</p>
+              <p className="font-medium text-foreground capitalize">
                 {appointmentDetails?.status || "booked"}
-              </dd>
+              </p>
             </div>
           </div>
         </div>

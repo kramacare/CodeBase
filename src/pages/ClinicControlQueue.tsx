@@ -2,7 +2,19 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQueue } from "@/context/QueueContext";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Users, SkipForward, ArrowRightCircle, RefreshCw, Clock } from "lucide-react";
+import { ArrowLeft, Users, SkipForward, ArrowRightCircle, RefreshCw, Clock, Phone, Mail } from "lucide-react";
+
+interface BookedPatient {
+  id: number;
+  token: string;
+  patient_name: string;
+  patient_email: string;
+  patient_phone: string;
+  doctor_name: string;
+  date: string;
+  time: string;
+  status: string;
+}
 
 const ClinicControlQueue = () => {
   const {
@@ -19,6 +31,8 @@ const ClinicControlQueue = () => {
   
   const [clinicId, setClinicId] = useState("");
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [bookedPatients, setBookedPatients] = useState<BookedPatient[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Get clinic_id from localStorage on mount
   useEffect(() => {
@@ -26,8 +40,24 @@ const ClinicControlQueue = () => {
     if (clinicStr) {
       setClinicId(clinicStr);
       fetchQueueForClinic(clinicStr);
+      fetchBookedPatients(clinicStr);
     }
   }, [fetchQueueForClinic]);
+
+  const fetchBookedPatients = async (clinicId: string) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8000/auth/clinic/appointments?clinic_id=${clinicId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setBookedPatients(data.appointments || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch booked patients:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Update elapsed time every second when a patient is being served
   useEffect(() => {
@@ -49,6 +79,7 @@ const ClinicControlQueue = () => {
     if (window.confirm("Are you sure you want to refresh the queue? This will clear all current data and start fresh for today.")) {
       if (clinicId) {
         fetchQueueForClinic(clinicId);
+        fetchBookedPatients(clinicId);
       }
     }
   };
@@ -72,15 +103,6 @@ const ClinicControlQueue = () => {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <span className="font-semibold text-foreground">Control Queue</span>
-          
-          <Button 
-            variant="outline" 
-            className="ml-auto border-gray-300 text-[#0F172A] hover:bg-gray-50 rounded-lg px-3 py-1.5 transition-all duration-200" 
-            onClick={handleRefreshQueue}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
         </div>
       </header>
 
@@ -161,7 +183,7 @@ const ClinicControlQueue = () => {
           </div>
 
           {/* QUEUE LIST */}
-          <div className="bg-white rounded-2xl shadow-sm p-6">
+          <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
               <Users size={18} className="text-[#0F172A]" />
               <h2 className="font-semibold text-[#0F172A]">Waiting Queue</h2>
@@ -189,6 +211,68 @@ const ClinicControlQueue = () => {
                   </span>
                 </div>
               ))
+            )}
+          </div>
+
+          {/* BOOKED PATIENTS LIST */}
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Users size={18} className="text-[#00555A]" />
+                <h2 className="font-semibold text-[#0F172A]">Booked Patients</h2>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => fetchBookedPatients(clinicId)}
+                className="text-[#00555A] hover:text-[#00555A]/80"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {loading ? (
+              <p className="text-gray-500 text-center py-4">Loading...</p>
+            ) : bookedPatients.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No patients have booked yet</p>
+            ) : (
+              <div className="space-y-3">
+                {bookedPatients.map((patient) => (
+                  <div
+                    key={patient.id}
+                    className="rounded-lg border border-gray-200 px-4 py-3"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium text-[#0F172A]">
+                          {patient.token} — {patient.patient_name}
+                        </p>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-600">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {patient.time}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" />
+                            {patient.patient_email}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            {patient.patient_phone || "N/A"}
+                          </span>
+                        </div>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        patient.status === "booked" 
+                          ? "bg-green-100 text-green-700" 
+                          : "bg-gray-100 text-gray-700"
+                      }`}>
+                        {patient.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>

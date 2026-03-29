@@ -1,26 +1,58 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthCard from "@/components/auth/AuthCard";
-import { User, Phone, Mail, Lock, ArrowRight } from "lucide-react";
+import { User, Phone, Mail, Lock, ArrowRight, Check, X } from "lucide-react";
+
+const validatePassword = (password: string) => ({
+  length: password.length >= 8,
+  uppercase: /[A-Z]/.test(password),
+  lowercase: /[a-z]/.test(password),
+  number: /[0-9]/.test(password),
+  special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+});
+
+const Requirement = ({ met, label }: { met: boolean; label: string }) => (
+  <div className="flex items-center gap-2">
+    {met ? (
+      <Check className="h-4 w-4 text-green-600" />
+    ) : (
+      <X className="h-4 w-4 text-red-500" />
+    )}
+    <span className={met ? "text-green-700" : "text-muted-foreground"}>{label}</span>
+  </div>
+);
 
 const PatientSignup = () => {
+  const navigate = useNavigate();
   const [step, setStep] = useState<"form" | "otp">("form");
   const [form, setForm] = useState({ name: "", phone: "", email: "", password: "", confirm: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [otpLoading, setOtpLoading] = useState(false);
-  const navigate = useNavigate();
+  const [passwordValid, setPasswordValid] = useState({
+    length: false,
+    uppercase: false,
+    lowercase: false,
+    number: false,
+    special: false,
+  });
 
   const update = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    setPasswordValid(validatePassword(form.password));
+  }, [form.password]);
+
+  const allValid = Object.values(passwordValid).every(Boolean);
+  const isSubmitDisabled = !allValid || form.password !== form.confirm || !form.name || !form.email;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.email || !form.password) return setError("Please fill all required fields.");
     if (form.password !== form.confirm) return setError("Passwords do not match.");
-    if (form.password.length < 6) return setError("Password must be at least 6 characters.");
+    if (!allValid) return setError("Please meet all password requirements.");
     
     setError("");
     setLoading(true);
@@ -60,18 +92,10 @@ const PatientSignup = () => {
     }
   };
 
-  const handleOTPSuccess = () => {
-    // Clear temp data and redirect to login
-    localStorage.removeItem("pending_signup_data");
-    navigate("/patient/login");
-  };
-
   if (step === "otp") {
     return (
       <OTPVerificationPage 
-        email={form.email} 
-        userData={form}
-        onSuccess={handleOTPSuccess}
+        email={form.email}
         onBack={() => setStep("form")}
       />
     );
@@ -135,6 +159,19 @@ const PatientSignup = () => {
             </div>
           </div>
 
+          {form.password && (
+            <div className="rounded-lg border p-3 text-sm">
+              <p className="font-medium mb-2">Password Requirements:</p>
+              <div className="grid grid-cols-2 gap-1">
+                <Requirement met={passwordValid.length} label="At least 8 characters" />
+                <Requirement met={passwordValid.uppercase} label="One uppercase (A-Z)" />
+                <Requirement met={passwordValid.lowercase} label="One lowercase (a-z)" />
+                <Requirement met={passwordValid.number} label="One number (0-9)" />
+                <Requirement met={passwordValid.special} label="One special (!@#$...)" />
+              </div>
+            </div>
+          )}
+
           <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-700">
             <strong>Note:</strong> An OTP will be sent to your email for verification before account creation.
           </div>
@@ -155,12 +192,11 @@ const PatientSignup = () => {
 };
 
 // OTP Verification Page Component
-const OTPVerificationPage = ({ email, userData, onSuccess, onBack }: { 
+const OTPVerificationPage = ({ email, onBack }: { 
   email: string, 
-  userData: any, 
-  onSuccess: () => void,
   onBack: () => void
 }) => {
+  const navigate = useNavigate();
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -168,7 +204,6 @@ const OTPVerificationPage = ({ email, userData, onSuccess, onBack }: {
   const [resendLoading, setResendLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
-  // Countdown timer
   useEffect(() => {
     if (countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
@@ -209,7 +244,6 @@ const OTPVerificationPage = ({ email, userData, onSuccess, onBack }: {
       }
 
       setSuccess(true);
-      setTimeout(onSuccess, 2000);
     } catch (err) {
       setError("Network error. Please try again.");
     } finally {
@@ -256,7 +290,10 @@ const OTPVerificationPage = ({ email, userData, onSuccess, onBack }: {
               </svg>
             </div>
             <h2 className="text-2xl font-bold text-green-600 mb-2">Account Created!</h2>
-            <p className="text-muted-foreground">Redirecting to login...</p>
+            <p className="text-muted-foreground mb-6">Your patient account has been successfully created.</p>
+            <Button onClick={() => navigate("/patient/login")} className="w-full">
+              Go to Patient Login <ArrowRight className="ml-1 h-4 w-4" />
+            </Button>
           </div>
         </AuthCard>
       </div>
@@ -322,7 +359,5 @@ const OTPVerificationPage = ({ email, userData, onSuccess, onBack }: {
     </div>
   );
 };
-
-import { useEffect } from "react";
 
 export default PatientSignup;

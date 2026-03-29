@@ -12,6 +12,9 @@ const PatientProfile = () => {
   const [dbProfile, setDbProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   
+  // Message state
+  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+
   // Get the actual logged-in user's email from localStorage
   const getLoggedInEmail = () => {
     try {
@@ -35,6 +38,14 @@ const PatientProfile = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Auto-hide message after 5 seconds
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   // Fetch patient data from database using actual logged-in email
   useEffect(() => {
@@ -74,7 +85,7 @@ const PatientProfile = () => {
 
   const handleChangePhone = async () => {
     if (!loggedInEmail) {
-      alert("No logged-in user found");
+      setMessage({text: "No logged-in user found", type: "error"});
       return;
     }
 
@@ -89,7 +100,7 @@ const PatientProfile = () => {
       });
 
       if (response.ok) {
-        alert("Phone number updated successfully!");
+        setMessage({text: "Phone number updated successfully!", type: "success"});
         // Refresh data to show updated phone
         const fetchUpdatedData = async () => {
           try {
@@ -106,21 +117,21 @@ const PatientProfile = () => {
         fetchUpdatedData();
       } else {
         const error = await response.json();
-        alert(error.detail || "Failed to update phone number");
+        setMessage({text: error.detail || "Failed to update phone number", type: "error"});
       }
     } catch (error) {
-      alert("Network error. Please try again.");
+      setMessage({text: "Network error. Please try again.", type: "error"});
     }
   };
 
   const handleChangePassword = async () => {
     if (!loggedInEmail) {
-      alert("No logged-in user found");
+      setMessage({text: "No logged-in user found", type: "error"});
       return;
     }
 
     if (!currentPassword || !newPassword || newPassword !== confirmPassword) {
-      alert("Please fill all password fields correctly");
+      setMessage({text: "Please fill all password fields correctly", type: "error"});
       return;
     }
 
@@ -136,28 +147,28 @@ const PatientProfile = () => {
       });
 
       if (response.ok) {
-        alert("Password changed successfully!");
+        setMessage({text: "Password changed successfully!", type: "success"});
         // Clear password fields
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
       } else {
         const error = await response.json();
-        alert(error.detail || "Failed to change password");
+        setMessage({text: error.detail || "Failed to change password", type: "error"});
       }
     } catch (error) {
-      alert("Network error. Please try again.");
+      setMessage({text: "Network error. Please try again.", type: "error"});
     }
   };
 
   const handleDeleteAccount = async () => {
     if (!loggedInEmail) {
-      alert("No logged-in user found");
+      setMessage({text: "No logged-in user found", type: "error"});
       return;
     }
 
     if (!deletePassword) {
-      alert("Please enter your password to delete account");
+      setMessage({text: "Please enter your password to delete account", type: "error"});
       return;
     }
 
@@ -177,18 +188,18 @@ const PatientProfile = () => {
       });
 
       if (response.ok) {
-        alert("Account deleted successfully!");
+        setMessage({text: "Account deleted successfully!", type: "success"});
         // Clear all localStorage data
         localStorage.clear();
         // Redirect to landing page
         navigate("/");
       } else {
         const error = await response.json();
-        alert(error.detail || "Failed to delete account");
+        setMessage({text: error.detail || "Failed to delete account", type: "error"});
       }
     } catch (error) {
       console.error("Error deleting account:", error);
-      alert("Network error. Please try again.");
+      setMessage({text: "Network error. Please try again.", type: "error"});
     }
   };
 
@@ -215,6 +226,15 @@ const PatientProfile = () => {
         </div>
       </header>
 
+      {/* Message Toast */}
+      {message && (
+        <div className={`fixed top-20 right-4 z-50 px-6 py-3 rounded-lg shadow-lg animate-fade-in ${
+          message.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+        }`}>
+          {message.text}
+        </div>
+      )}
+
       <main className="mx-auto max-w-4xl px-4 py-8">
         {/* Profile Info Card */}
         <div className="mb-8 rounded-2xl bg-white shadow-lg overflow-hidden">
@@ -237,7 +257,11 @@ const PatientProfile = () => {
           
           {dbProfile && (
             <div className="p-6 bg-gray-50 border-t">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Patient ID:</span>
+                  <p className="font-medium text-gray-900 font-mono">{dbProfile.patient_id}</p>
+                </div>
                 <div>
                   <span className="text-gray-500">Phone:</span>
                   <p className="font-medium text-gray-900">{dbProfile.phone}</p>

@@ -3,6 +3,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -11,11 +15,11 @@ class EmailService:
     """Service for sending emails via SMTP"""
     
     def __init__(self):
-        self.smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        self.smtp_host = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.smtp_user = os.getenv("SMTP_USER", "")
+        self.smtp_user = os.getenv("SMTP_USERNAME", "")
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.sender_email = os.getenv("SENDER_EMAIL", self.smtp_user)
+        self.sender_email = os.getenv("FROM_EMAIL", self.smtp_user)
         self.sender_name = os.getenv("SENDER_NAME", "Krama Clinic")
     
     def send_otp_email(self, to_email: str, otp_code: str) -> bool:
