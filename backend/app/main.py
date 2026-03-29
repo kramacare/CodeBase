@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.database.db import engine
 from app.database.models import Base
-from app.routers import auth
+from app.routers import auth, queue_endpoints, password_reset
 
 app = FastAPI(title="Clinic Authentication API", version="1.0.0")
 
@@ -17,6 +17,8 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(queue_endpoints.router)
+app.include_router(password_reset.router)
 
 @app.on_event("startup")
 async def startup():

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.database.db import get_db
-from app.database.models import Clinic, Patient, OTPVerification, Appointment
+from app.database.models import Clinic, Patient, OTPVerification, Appointment, CompletedAppointment
 from app.schemas import (
     ClinicSignup, ClinicLogin, PatientSignup, PatientLogin,
     ChangePasswordRequest, ChangePhoneRequest, DeleteAccountRequest,
@@ -623,6 +623,22 @@ async def create_appointment(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing required fields"
+        )
+    
+    # Check if patient already has an appointment for this clinic on this date
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.clinic_id == clinic_id,
+            Appointment.patient_email == patient_email,
+            Appointment.date == date
+        )
+    )
+    existing_appointment = result.scalar_one_or_none()
+    
+    if existing_appointment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You already have an appointment booked for this clinic on this date"
         )
     
     # Get next token number for this clinic

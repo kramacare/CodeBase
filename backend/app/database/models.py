@@ -44,6 +44,25 @@ class Appointment(Base):
     status = Column(String, default="booked")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+class CompletedAppointment(Base):
+    """Model for storing completed/served patient history"""
+    __tablename__ = "completed_appointments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    appointment_token = Column(String, nullable=False)
+    clinic_id = Column(String, nullable=False)
+    patient_id = Column(String, nullable=False)
+    patient_name = Column(String, nullable=False)
+    patient_email = Column(String, nullable=False)
+    patient_phone = Column(String, nullable=False)
+    doctor_name = Column(String, nullable=True)
+    date = Column(String, nullable=False)
+    time = Column(String, nullable=False)
+    served_at = Column(DateTime(timezone=True), server_default=func.now())
+    finished_at = Column(DateTime(timezone=True))
+    status = Column(String, default="served")  # served, completed, skipped
+    wait_time_minutes = Column(Integer, nullable=True)  # how long they waited
+
 class OTPVerification(Base):
     """Model for storing OTP verification codes and pending user data"""
     __tablename__ = "otp_verifications"

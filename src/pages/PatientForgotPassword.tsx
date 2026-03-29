@@ -1,19 +1,16 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthCard from "@/components/auth/AuthCard";
+import { Activity, Mail, ArrowLeft, ArrowRight } from "lucide-react";
 
-import { Activity, Mail, Lock, ArrowRight } from "lucide-react";
-
-const PatientLogin = () => {
+const PatientForgotPassword = () => {
   const navigate = useNavigate();
-
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,43 +21,36 @@ const PatientLogin = () => {
       return;
     }
 
-    if (!password.trim()) {
-      setError("Please enter your password.");
-      return;
-    }
-
     setError("");
+    setMessage("");
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/auth/patient/login", {
+      const response = await fetch("http://localhost:8000/auth/patient/forgot-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           email: email,
-          password: password,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.detail || "Login failed");
+        setError(data.detail || "Failed to send OTP");
         return;
       }
 
-      const userData = {
-        id: data.user_id,
-        type: data.user_type,
-        email: email,
-        name: data.patient_data?.name || email.split('@')[0],
-        patient_id: data.patient_data?.patient_id || null
-      };
-      localStorage.setItem("user", JSON.stringify(userData));
-
-      navigate("/patient");
+      setMessage("OTP sent to your email. Please check your inbox.");
+      // Store email in sessionStorage for next steps
+      sessionStorage.setItem("reset_email", email);
+      
+      // Navigate to OTP verification after 2 seconds
+      setTimeout(() => {
+        navigate("/patient/verify-reset-otp");
+      }, 2000);
     } catch (err) {
       setError("Network error. Please try again.");
     } finally {
@@ -84,21 +74,27 @@ const PatientLogin = () => {
           </div>
         </div>
 
-        {/* RIGHT LOGIN FORM */}
+        {/* RIGHT FORGOT PASSWORD FORM */}
         <div className="flex flex-1 items-center justify-center px-4 py-12">
           <AuthCard>
             <div className="mb-6 text-center lg:text-left">
               <h1 className="text-2xl font-bold text-foreground">
-                Patient Login
+                Forgot Password
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Welcome back! Sign in to manage your appointments.
+                Enter your email to receive a password reset OTP.
               </p>
             </div>
 
             {error && (
               <div className="mb-4 rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
                 {error}
+              </div>
+            )}
+
+            {message && (
+              <div className="mb-4 rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">
+                {message}
               </div>
             )}
 
@@ -117,45 +113,21 @@ const PatientLogin = () => {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                  <Link
-                    to="/patient/forgot-password"
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-              </div>
-
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Logging in..." : "Login"}
+                {loading ? "Sending OTP..." : "Send OTP"}
                 <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
             </form>
 
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              New user?{" "}
+            <div className="mt-6 text-center">
               <Link
-                to="/patient/signup"
-                className="font-medium text-primary hover:underline"
+                to="/patient/login"
+                className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
               >
-                Create account
+                <ArrowLeft className="mr-1 h-4 w-4" />
+                Back to login
               </Link>
-            </p>
+            </div>
           </AuthCard>
         </div>
       </div>
@@ -163,4 +135,4 @@ const PatientLogin = () => {
   );
 };
 
-export default PatientLogin;
+export default PatientForgotPassword;
