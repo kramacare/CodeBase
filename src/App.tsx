@@ -14,6 +14,7 @@ import PatientProfile from "./pages/PatientProfile";
 import ClinicDashboard from "./pages/ClinicDashboard";
 import ClinicControlQueue from "./pages/ClinicControlQueue";
 import ClinicManageTime from "./pages/ClinicManageTime";
+import ClinicLook from "./pages/ClinicLook";
 import ClinicProfile from "./pages/ClinicProfile";
 import ClinicDetails from "./pages/ClinicDetails";
 import BookAppointment from "./pages/BookAppointment";
@@ -74,6 +75,7 @@ function App() {
             <Route path="/clinic" element={<NoHeaderLayout><ClinicDashboard /></NoHeaderLayout>} />
             <Route path="/clinic/control-queue" element={<NoHeaderLayout><ClinicControlQueue /></NoHeaderLayout>} />
             <Route path="/clinic/manage-time" element={<NoHeaderLayout><ClinicManageTime /></NoHeaderLayout>} />
+            <Route path="/clinic/look" element={<NoHeaderLayout><ClinicLook /></NoHeaderLayout>} />
             <Route path="/clinic/profile" element={<NoHeaderLayout><ClinicProfile /></NoHeaderLayout>} />
 
             {/* 404 with Header */}

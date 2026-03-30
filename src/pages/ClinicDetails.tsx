@@ -78,7 +78,6 @@ const ClinicDetails = () => {
           );
           if (response.ok) {
             const data = await response.json();
-            // Convert string keys to number keys
             const reactions: {[key: number]: string} = {};
             Object.entries(data.reactions).forEach(([key, value]) => {
               reactions[parseInt(key)] = value as string;
@@ -110,14 +109,7 @@ const ClinicDetails = () => {
         setReviews(reviews.map(r => 
           r.id === reviewId ? { ...r, likes: data.likes, dislikes: data.dislikes } : r
         ));
-        // Update user reaction state
-        if (data.user_reaction) {
-          setUserReactions({ ...userReactions, [reviewId]: data.user_reaction });
-        } else {
-          const newReactions = { ...userReactions };
-          delete newReactions[reviewId];
-          setUserReactions(newReactions);
-        }
+        setUserReactions({ ...userReactions, [reviewId]: data.user_reaction });
       }
     } catch (error) {
       console.error("Error liking review:", error);
@@ -137,14 +129,7 @@ const ClinicDetails = () => {
         setReviews(reviews.map(r => 
           r.id === reviewId ? { ...r, likes: data.likes, dislikes: data.dislikes } : r
         ));
-        // Update user reaction state
-        if (data.user_reaction) {
-          setUserReactions({ ...userReactions, [reviewId]: data.user_reaction });
-        } else {
-          const newReactions = { ...userReactions };
-          delete newReactions[reviewId];
-          setUserReactions(newReactions);
-        }
+        setUserReactions({ ...userReactions, [reviewId]: data.user_reaction });
       }
     } catch (error) {
       console.error("Error disliking review:", error);
