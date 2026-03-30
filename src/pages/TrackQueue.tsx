@@ -46,27 +46,39 @@ const TrackQueue = () => {
           if (response.ok) {
             const data = await response.json();
             if (data.appointments && data.appointments.length > 0) {
-              const latestAppointment = data.appointments[0];
+              // Get the latest appointment for today
+              const today = new Date().toISOString().split('T')[0];
+              const todayAppointments = data.appointments.filter((apt: any) => apt.date === today);
               
-              // Fetch queue position based on token
-              const queueResponse = await fetch(
-                `http://localhost:8000/auth/appointments/queue-position?clinic_id=${latestAppointment.clinic_id}&appointment_token=${latestAppointment.token}&appointment_id=${latestAppointment.id}`
-              );
-              if (queueResponse.ok) {
-                const queueData = await queueResponse.json();
-                setQueuePosition(queueData);
+              if (todayAppointments.length > 0) {
+                const latestAppointment = todayAppointments[0];
+                
+                // Fetch queue position based on appointment
+                const queueResponse = await fetch(
+                  `http://localhost:8000/auth/appointments/queue-position?clinic_id=${latestAppointment.clinic_id}&appointment_token=${latestAppointment.token}&appointment_id=${latestAppointment.id}`
+                );
+                if (queueResponse.ok) {
+                  const queueData = await queueResponse.json();
+                  setQueuePosition(queueData);
+                }
               }
             }
           }
         }
       } catch (error) {
+        console.error("Error fetching queue position:", error);
         setMessage({text: "Error fetching queue position", type: "error"});
       } finally {
         setLoading(false);
       }
     };
 
+    // Initial fetch
     fetchQueuePosition();
+    
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchQueuePosition, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {

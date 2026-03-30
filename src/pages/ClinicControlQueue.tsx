@@ -50,7 +50,10 @@ const ClinicControlQueue = () => {
       const response = await fetch(`http://localhost:8000/auth/clinic/appointments?clinic_id=${clinicId}`);
       if (response.ok) {
         const data = await response.json();
-        setBookedPatients(data.appointments || []);
+        // Also filter in frontend to ensure only today's appointments
+        const today = new Date().toISOString().split('T')[0];
+        const todayAppointments = (data.appointments || []).filter((apt: any) => apt.date === today);
+        setBookedPatients(todayAppointments);
       }
     } catch (error) {
       console.error("Failed to fetch booked patients:", error);

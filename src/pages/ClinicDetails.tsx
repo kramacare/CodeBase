@@ -1,17 +1,34 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { ArrowLeft, MapPin, Phone, Star, Clock } from "lucide-react";
+import { ArrowLeft, MapPin, Phone, Star, Clock, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+interface Review {
+  id: number;
+  patient_name: string;
+  rating: number;
+  review_text: string;
+  likes: number;
+  dislikes: number;
+  created_at: string;
+}
 
 const ClinicDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [clinic, setClinic] = useState<any>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [averageRating, setAverageRating] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showTimeSelection, setShowTimeSelection] = useState(false);
   const [selectedTime, setSelectedTime] = useState("");
+  const [selectedDate, setSelectedDate] = useState("");
   const [booking, setBooking] = useState(false);
   const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+  const [timeSlots, setTimeSlots] = useState<any[]>([]);
+  const [dates, setDates] = useState<any[]>([]);
+  const [userReactions, setUserReactions] = useState<{[key: number]: string}>({});
+  const [patientId, setPatientId] = useState<string>("");
 
   useEffect(() => {
     if (message) {
@@ -32,22 +49,140 @@ const ClinicDetails = () => {
         }
       } catch (error) {
         setMessage({text: "Network error. Please try again.", type: "error"});
-      } finally {
-        setLoading(false);
       }
     };
 
+    const fetchReviews = async () => {
+      try {
+        const response = await fetch(`http://localhost:8000/auth/reviews/clinic?clinic_id=${id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setReviews(data.reviews || []);
+          setAverageRating(data.average_rating || 0);
+        }
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+      }
+    };
+
+    const fetchUserReactions = async () => {
+      const userStr = localStorage.getItem("user");
+      if (userStr && id) {
+        const user = JSON.parse(userStr);
+        const pid = user.patient_id || user.id;
+        setPatientId(pid);
+        
+        try {
+          const response = await fetch(
+            `http://localhost:8000/auth/reviews/user-reaction?clinic_id=${id}&patient_id=${pid}`
+          );
+          if (response.ok) {
+            const data = await response.json();
+            // Convert string keys to number keys
+            const reactions: {[key: number]: string} = {};
+            Object.entries(data.reactions).forEach(([key, value]) => {
+              reactions[parseInt(key)] = value as string;
+            });
+            setUserReactions(reactions);
+          }
+        } catch (error) {
+          console.error("Error fetching user reactions:", error);
+        }
+      }
+      setLoading(false);
+    };
+
     fetchClinicData();
+    fetchReviews();
+    fetchUserReactions();
   }, [id]);
 
-  const generateTimeSlots = () => {
-    const times = [
-      "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
-      "11:00 AM", "11:30 AM", "12:00 PM", "02:00 PM",
-      "02:30 PM", "03:00 PM", "03:30 PM", "04:00 PM",
-      "04:30 PM", "05:00 PM"
-    ];
-    return times;
+  const handleLike = async (reviewId: number) => {
+    if (!patientId) return;
+    
+    try {
+      const response = await fetch(
+        `http://localhost:8000/auth/reviews/like?review_id=${reviewId}&patient_id=${patientId}`,
+        { method: "POST" }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setReviews(reviews.map(r => 
+          r.id === reviewId ? { ...r, likes: data.likes, dislikes: data.dislikes } : r
+        ));
+        // Update user reaction state
+        if (data.user_reaction) {
+          setUserReactions({ ...userReactions, [reviewId]: data.user_reaction });
+        } else {
+          const newReactions = { ...userReactions };
+          delete newReactions[reviewId];
+          setUserReactions(newReactions);
+        }
+      }
+    } catch (error) {
+      console.error("Error liking review:", error);
+    }
+  };
+
+  const handleDislike = async (reviewId: number) => {
+    if (!patientId) return;
+    
+    try {
+      const response = await fetch(
+        `http://localhost:8000/auth/reviews/dislike?review_id=${reviewId}&patient_id=${patientId}`,
+        { method: "POST" }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setReviews(reviews.map(r => 
+          r.id === reviewId ? { ...r, likes: data.likes, dislikes: data.dislikes } : r
+        ));
+        // Update user reaction state
+        if (data.user_reaction) {
+          setUserReactions({ ...userReactions, [reviewId]: data.user_reaction });
+        } else {
+          const newReactions = { ...userReactions };
+          delete newReactions[reviewId];
+          setUserReactions(newReactions);
+        }
+      }
+    } catch (error) {
+      console.error("Error disliking review:", error);
+    }
+  };
+
+  const fetchTimeSlots = async (date: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/auth/clinic/time-slots?clinic_id=${id}&date=${date}`);
+      if (response.ok) {
+        const data = await response.json();
+        setTimeSlots(data.slots || []);
+      }
+    } catch (error) {
+      console.error("Error fetching time slots:", error);
+    }
+  };
+
+  const generateDates = () => {
+    const dates = [];
+    const today = new Date();
+    
+    for (let i = 0; i < 3; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      
+      const dateStr = date.toISOString().split('T')[0];
+      const dayName = i === 0 ? "Today" : i === 1 ? "Tomorrow" : date.toLocaleDateString("en-US", { weekday: "short" });
+      const displayDate = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      
+      dates.push({
+        value: dateStr,
+        label: dayName,
+        display: displayDate
+      });
+    }
+    
+    return dates;
   };
 
   const handleBookClick = () => {
@@ -56,12 +191,27 @@ const ClinicDetails = () => {
       navigate("/patient/login");
       return;
     }
+    
+    // Generate dates for next 3 days
+    const dateOptions = generateDates();
+    setDates(dateOptions);
+    
+    // Default to today
+    const defaultDate = dateOptions[0].value;
+    setSelectedDate(defaultDate);
+    fetchTimeSlots(defaultDate);
     setShowTimeSelection(true);
   };
 
+  const handleDateChange = (date: string) => {
+    setSelectedDate(date);
+    setSelectedTime("");
+    fetchTimeSlots(date);
+  };
+
   const handleConfirmBooking = async () => {
-    if (!selectedTime) {
-      setMessage({text: "Please select a time", type: "error"});
+    if (!selectedTime || !selectedDate) {
+      setMessage({text: "Please select a date and time", type: "error"});
       return;
     }
 
@@ -69,7 +219,6 @@ const ClinicDetails = () => {
     try {
       const userStr = localStorage.getItem("user");
       const user = JSON.parse(userStr);
-      const today = new Date().toISOString().split('T')[0];
 
       const clinicId = clinic.clinic_id || id;
       
@@ -97,8 +246,8 @@ const ClinicDetails = () => {
         patient_phone: patientPhone || "",
         clinic_id: clinicId,
         doctor_name: clinic.doctor_name || "General",
-        date: today,
-        time: selectedTime || "10:00"
+        date: selectedDate,
+        time: selectedTime
       };
 
       const response = await fetch("http://localhost:8000/auth/appointments/create", {
@@ -116,7 +265,7 @@ const ClinicDetails = () => {
           state: {
             clinic: clinic.clinic_name,
             doctor: clinic.doctor_name || "Available Doctor",
-            date: today,
+            date: selectedDate,
             time: selectedTime,
             address: clinic.address,
             token: data.token,
@@ -194,7 +343,7 @@ const ClinicDetails = () => {
               </span>
               <span className="flex items-center gap-1">
                 <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                4.5 (150 reviews)
+                {averageRating.toFixed(1)} ({reviews.length} reviews)
               </span>
             </div>
 
@@ -226,6 +375,83 @@ const ClinicDetails = () => {
                 </div>
               </div>
             </div>
+
+            {/* Reviews Section */}
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Reviews ({reviews.length})
+                </h2>
+                <div className="flex items-center gap-2">
+                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                  <span className="text-sm font-medium">{averageRating.toFixed(1)}</span>
+                </div>
+              </div>
+              
+              {reviews.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground text-sm">
+                  No reviews yet. Be the first to review!
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {reviews.map((review) => (
+                    <div key={review.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="font-semibold text-foreground">{review.patient_name}</p>
+                          <div className="flex items-center gap-1 mt-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                className={`h-4 w-4 ${
+                                  star <= review.rating
+                                    ? "fill-amber-400 text-amber-400"
+                                    : "text-gray-300"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(review.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      
+                      {review.review_text && (
+                        <p className="text-sm text-muted-foreground mb-3">
+                          {review.review_text}
+                        </p>
+                      )}
+                      
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={() => handleLike(review.id)}
+                          className={`flex items-center gap-1 text-sm transition-colors ${
+                            userReactions[review.id] === 'like'
+                              ? 'text-blue-600 font-semibold'
+                              : 'text-muted-foreground hover:text-blue-600'
+                          }`}
+                        >
+                          <ThumbsUp className={`h-4 w-4 ${userReactions[review.id] === 'like' ? 'fill-current' : ''}`} />
+                          <span>{review.likes || 0}</span>
+                        </button>
+                        <button
+                          onClick={() => handleDislike(review.id)}
+                          className={`flex items-center gap-1 text-sm transition-colors ${
+                            userReactions[review.id] === 'dislike'
+                              ? 'text-red-600 font-semibold'
+                              : 'text-muted-foreground hover:text-red-600'
+                          }`}
+                        >
+                          <ThumbsDown className={`h-4 w-4 ${userReactions[review.id] === 'dislike' ? 'fill-current' : ''}`} />
+                          <span>{review.dislikes || 0}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           /* Time Selection View */
@@ -237,20 +463,44 @@ const ClinicDetails = () => {
               <p className="text-sm text-muted-foreground">{clinic.doctor_name || "Available Doctor"}</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              {generateTimeSlots().map((time) => (
+            {/* Date Tabs */}
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+              {dates.map((date) => (
                 <button
-                  key={time}
-                  onClick={() => setSelectedTime(time)}
-                  className={`p-3 rounded-lg border text-sm transition-colors ${
-                    selectedTime === time
-                      ? "border-[#00555A] bg-[#00555A] text-white"
-                      : "border-border bg-card hover:border-[#00555A]"
+                  key={date.value}
+                  onClick={() => handleDateChange(date.value)}
+                  className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
+                    selectedDate === date.value
+                      ? "bg-[#00555A] text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
-                  {time}
+                  {date.label}, {date.display}
                 </button>
               ))}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {timeSlots.length > 0 ? (
+                timeSlots.map((slot) => (
+                  <button
+                    key={slot.time}
+                    onClick={() => slot.available && setSelectedTime(slot.display)}
+                    disabled={!slot.available}
+                    className={`p-3 rounded-lg border text-sm transition-colors ${
+                      !slot.available
+                        ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                        : selectedTime === slot.display
+                          ? "border-[#00555A] bg-[#00555A] text-white"
+                          : "border-border bg-card hover:border-[#00555A]"
+                    }`}
+                  >
+                    {slot.display}
+                  </button>
+                ))
+              ) : (
+                <p className="col-span-3 text-center text-muted-foreground">No time slots available</p>
+              )}
             </div>
 
             <div className="mt-6">

@@ -67,22 +67,28 @@ const AppointmentConfirmation = () => {
           if (response.ok) {
             const data = await response.json();
             if (data.appointments && data.appointments.length > 0) {
-              // Get the most recent appointment
-              const latestAppointment = data.appointments[0];
-              setAppointmentDetails(latestAppointment);
+              // Get only today's appointments
+              const today = new Date().toISOString().split('T')[0];
+              const todayAppointments = data.appointments.filter((apt: any) => apt.date === today);
               
-              // Fetch queue position based on clinic_id and token
-              const queueResponse = await fetch(
-                `http://localhost:8000/auth/appointments/queue-position?clinic_id=${latestAppointment.clinic_id}&appointment_token=${latestAppointment.token}&appointment_id=${latestAppointment.id}`
-              );
-              if (queueResponse.ok) {
-                const queueData = await queueResponse.json();
-                setQueuePosition(queueData);
+              if (todayAppointments.length > 0) {
+                const latestAppointment = todayAppointments[0];
+                setAppointmentDetails(latestAppointment);
+                
+                // Fetch queue position based on clinic_id and token
+                const queueResponse = await fetch(
+                  `http://localhost:8000/auth/appointments/queue-position?clinic_id=${latestAppointment.clinic_id}&appointment_token=${latestAppointment.token}&appointment_id=${latestAppointment.id}`
+                );
+                if (queueResponse.ok) {
+                  const queueData = await queueResponse.json();
+                  setQueuePosition(queueData);
+                }
               }
             }
           }
         }
       } catch (error) {
+        console.error("Error fetching appointment details:", error);
         setMessage({text: "Error fetching appointment details", type: "error"});
       } finally {
         setLoading(false);
@@ -258,13 +264,6 @@ const AppointmentConfirmation = () => {
         </div>
 
         <div className="mt-6 space-y-3">
-          <Button
-            className="w-full bg-[#00555A] hover:bg-[#004455]"
-            onClick={() => navigate("/track")}
-          >
-            Track Live Queue
-          </Button>
-
           <Button
             variant="outline"
             className="w-full"
