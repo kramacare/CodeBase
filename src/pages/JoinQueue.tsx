@@ -42,7 +42,7 @@ const JoinQueue = () => {
 
       const data = await res.json();
 
-      navigate("/track", {
+      navigate("/confirmation", {
         state: {
           token: data.tokenLabel,
           tokenNumber: data.tokenNumber

@@ -187,15 +187,15 @@ const PatientDashboard = () => {
                     variant="outline"
                     className="w-full"
                     onClick={() =>
-                      navigate("/track", {
+                      navigate("/confirmation", {
                         state: {
                           token: patientToken.token,
                           clinic: patientToken.clinic,
-                          doctor: patientToken.doctor,
+                          doctor: patientToken.doctor || "Available Doctor",
                           date: patientToken.date,
                           time: patientToken.time,
-                          address: patientToken.address,
-                        },
+                          address: patientToken.address
+                        }
                       })
                     }
                   >

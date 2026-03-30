@@ -1,34 +1,91 @@
 import { useState, useEffect } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
-import { usePatient } from "@/context/PatientContext";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Star, Building2 } from "lucide-react";
 
+interface VisitState {
+  clinic_id: string;
+  clinic_name: string;
+  date: string;
+  time: string;
+}
+
 const PatientWriteReview = () => {
-  const { visitId } = useParams<{ visitId: string }>();
+  const { clinicId } = useParams<{ clinicId: string }>();
   const navigate = useNavigate();
-  const { visitHistory, markReviewed } = usePatient();
+  const location = useLocation();
   const [reviewText, setReviewText] = useState("");
   const [rating, setRating] = useState(5);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
-  const visit = visitHistory.find((v) => v.id === visitId);
+  const visit = location.state?.visit as VisitState | undefined;
 
   useEffect(() => {
-    if (!visit) {
+    if (!visit || !clinicId) {
       navigate("/patient/reviews");
     }
-  }, [visit, navigate]);
+  }, [visit, clinicId, navigate]);
 
-  const handleSubmitReview = () => {
-    if (visitId && reviewText.trim()) {
-      markReviewed(visitId, reviewText.trim(), rating);
-      navigate("/patient/reviews");
+  const handleSubmitReview = async () => {
+    if (!clinicId || !visit) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+
+        const response = await fetch("http://localhost:8000/auth/reviews/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clinic_id: clinicId,
+            patient_id: user.patient_id || user.id || "P-GUEST",
+            patient_name: user.name || user.email?.split('@')[0] || "Patient",
+            rating: rating,
+            review_text: reviewText.trim()
+          })
+        });
+
+        if (response.ok) {
+          setSuccess(true);
+          setTimeout(() => {
+            navigate("/patient/reviews");
+          }, 1500);
+        } else {
+          const data = await response.json();
+          setError(data.detail || "Failed to submit review");
+        }
+      }
+    } catch (err) {
+      setError("Failed to submit review");
+    } finally {
+      setLoading(false);
     }
   };
 
   if (!visit) {
     return null;
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-lg">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+            <Star className="h-10 w-10 text-green-600 fill-current" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Review Submitted!</h2>
+          <p className="mt-2 text-muted-foreground">Thank you for your feedback.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Redirecting to reviews...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -52,8 +109,8 @@ const PatientWriteReview = () => {
           <div className="flex items-center gap-3 mb-4">
             <Building2 className="h-6 w-6 text-[#00555A]" />
             <div>
-              <h1 className="text-xl font-semibold text-foreground">{visit.clinicName}</h1>
-              <p className="text-sm text-muted-foreground">{visit.date}</p>
+              <h1 className="text-xl font-semibold text-foreground">{visit.clinic_name}</h1>
+              <p className="text-sm text-muted-foreground">{visit.date} at {visit.time}</p>
             </div>
           </div>
         </div>
@@ -62,6 +119,12 @@ const PatientWriteReview = () => {
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-foreground mb-6">Share your experience</h2>
           
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
           <div className="space-y-6">
             {/* Rating */}
             <div className="space-y-3">
@@ -119,10 +182,10 @@ const PatientWriteReview = () => {
               </Button>
               <Button
                 onClick={handleSubmitReview}
-                disabled={!reviewText.trim()}
-                className="flex-1"
+                disabled={loading}
+                className="flex-1 bg-[#00555A] hover:bg-[#004455]"
               >
-                Submit Review
+                {loading ? "Submitting..." : "Submit Review"}
               </Button>
             </div>
           </div>

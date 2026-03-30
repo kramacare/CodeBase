@@ -31,7 +31,6 @@ import ClinicSignup from "./pages/ClinicSignup";
 import ClinicRegistrationSuccess from "./pages/ClinicRegistrationSuccess";
 import AboutUs from "./pages/AboutUs";
 import NotFound from "./pages/NotFound";
-import TrackQueue from "./pages/TrackQueue";
 
 
 function App() {
@@ -61,7 +60,7 @@ function App() {
             <Route path="/patient" element={<NoHeaderLayout><PatientDashboard /></NoHeaderLayout>} />
             <Route path="/patient/find-clinics" element={<NoHeaderLayout><PatientFindClinics /></NoHeaderLayout>} />
             <Route path="/patient/reviews" element={<NoHeaderLayout><PatientReviews /></NoHeaderLayout>} />
-            <Route path="/patient/reviews/:visitId" element={<NoHeaderLayout><PatientWriteReview /></NoHeaderLayout>} />
+            <Route path="/patient/reviews/:clinicId" element={<NoHeaderLayout><PatientWriteReview /></NoHeaderLayout>} />
             <Route path="/patient/profile" element={<NoHeaderLayout><PatientProfile /></NoHeaderLayout>} />
             <Route path="/clinic-details/:id" element={<NoHeaderLayout><ClinicDetails /></NoHeaderLayout>} />
             <Route path="/book/:clinicId/:doctorId" element={<NoHeaderLayout><BookAppointment /></NoHeaderLayout>} />
@@ -70,7 +69,6 @@ function App() {
             {/* Queue System without Header */}
             <Route path="/join" element={<NoHeaderLayout><JoinQueue /></NoHeaderLayout>} />
             <Route path="/live" element={<NoHeaderLayout><LiveQueue /></NoHeaderLayout>} />
-            <Route path="/track" element={<NoHeaderLayout><TrackQueue /></NoHeaderLayout>} />
 
             {/* Clinic Area without Header */}
             <Route path="/clinic" element={<NoHeaderLayout><ClinicDashboard /></NoHeaderLayout>} />

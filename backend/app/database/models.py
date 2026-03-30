@@ -15,6 +15,20 @@ class Clinic(Base):
     phone = Column(String, nullable=False)
     address = Column(String, nullable=False)
     doctor_name = Column(String, nullable=True)
+    available = Column(Boolean, default=True)  # True = available today, False = not available
+    start = Column(Integer, nullable=True)  # Operating hours start (e.g., 9)
+    end = Column(Integer, nullable=True)    # Operating hours end (e.g., 17)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Time(Base):
+    __tablename__ = "times"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_id = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    starting = Column(Integer, nullable=False)  # Start hour (e.g., 9)
+    ending = Column(Integer, nullable=False)    # End hour (e.g., 17)
+    not_available = Column(String, nullable=True)  # Comma-separated unavailable hours (e.g., "1,11")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Patient(Base):
@@ -79,3 +93,27 @@ class OTPVerification(Base):
     user_name = Column(String(255), nullable=False)
     user_password = Column(String(255), nullable=False)  # Bcrypt hash = ~60 chars
     user_phone = Column(String(50), nullable=False)
+
+class Review(Base):
+    """Model for storing patient reviews for clinics"""
+    __tablename__ = "reviews"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_id = Column(String, nullable=False, index=True)
+    patient_id = Column(String, nullable=False, index=True)
+    patient_name = Column(String, nullable=False)
+    rating = Column(Integer, nullable=False)  # 1-5 stars
+    review_text = Column(String, nullable=True)
+    likes = Column(Integer, default=0)
+    dislikes = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class ReviewReaction(Base):
+    """Model to track which users have liked/disliked reviews"""
+    __tablename__ = "review_reactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    review_id = Column(Integer, nullable=False, index=True)
+    patient_id = Column(String, nullable=False, index=True)
+    reaction_type = Column(String, nullable=False)  # 'like' or 'dislike'
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
