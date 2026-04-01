@@ -117,35 +117,49 @@ const PatientFindClinics = () => {
     setLocationLoading(true);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        () => {
-          setTimeout(() => {
-            setLocationName("Indiranagar, Bangalore");
-            setLocationGranted(true);
-            setLocationLoading(false);
-            setLoading(true);
-            setTimeout(() => setLoading(false), 1200);
-          }, 1500);
-        },
-        () => {
-          setLocationName("Indiranagar, Bangalore");
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          try {
+            // Use reverse geocoding to get actual location name
+            const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+            const data = await response.json();
+            const locationString = data.city || data.locality || data.principalSubdivision || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`;
+            setLocationName(locationString);
+          } catch (error) {
+            // Fallback to coordinates if API fails
+            setLocationName(`${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
+          }
           setLocationGranted(true);
           setLocationLoading(false);
           setLoading(true);
           setTimeout(() => setLoading(false), 1200);
-        }
+        },
+        async (error) => {
+          console.error("Geolocation error:", error);
+          // Try to get location anyway using a different method
+          try {
+            const response = await fetch('https://ipapi.co/json/');
+            const data = await response.json();
+            setLocationName(data.city || data.region || data.country || "Location not found");
+          } catch (e) {
+            setLocationName("Location unavailable");
+          }
+          setLocationGranted(true);
+          setLocationLoading(false);
+          setLoading(true);
+          setTimeout(() => setLoading(false), 1200);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
-      setLocationName("Indiranagar, Bangalore");
+      setLocationName("Geolocation not supported");
       setLocationGranted(true);
       setLocationLoading(false);
     }
   };
 
   const handleManual = () => {
-    setLocationName("Indiranagar, Bangalore");
-    setLocationGranted(true);
-    setLoading(true);
-    setTimeout(() => setLoading(false), 1200);
+    setMessage({text: "Please enter your location manually", type: "success"});
   };
 
   const filtered = clinics.filter((c) => {
