@@ -2,12 +2,14 @@ import json
 import random
 import string
 import re
+import os
+import uuid
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.database.db import get_db
-from app.database.models import Clinic, Patient, OTPVerification, Appointment, CompletedAppointment, Time, Review, ReviewReaction
+from app.database.models import Clinic, Patient, OTPVerification, Appointment, CompletedAppointment, Time, Review, ReviewReaction, ClinicImage
 from app.schemas import (
     ClinicSignup, ClinicLogin, PatientSignup, PatientLogin,
     ChangePasswordRequest, ChangePhoneRequest, DeleteAccountRequest,
@@ -225,6 +227,7 @@ async def get_clinic_data(
         "email": clinic.email,
         "phone": clinic.phone,
         "address": clinic.address,
+        "image_urls": clinic.image_urls or [],
         "doctor_name": clinic.doctor_name,
         "available": clinic.available,
         "created_at": clinic.created_at
@@ -306,6 +309,257 @@ async def clinic_change_password(
     await db.commit()
     
     return {"message": "Password changed successfully"}
+
+@router.put("/clinic/update-profile")
+async def update_clinic_profile(
+    request: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update clinic address and images"""
+    clinic_id = request.get("clinic_id")
+    address = request.get("address")
+    image_urls = request.get("image_urls")
+    
+    if not clinic_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="clinic_id is required"
+        )
+    
+    result = await db.execute(select(Clinic).where(Clinic.clinic_id == clinic_id))
+    clinic = result.scalar_one_or_none()
+    
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found"
+        )
+    
+    # Update address if provided
+    if address is not None:
+        clinic.address = address
+    
+    # Update image URLs if provided (max 5 images)
+    if image_urls is not None:
+        # Ensure only 5 images max
+        clinic.image_urls = image_urls[:5] if len(image_urls) > 5 else image_urls
+    
+    await db.commit()
+    
+    return {
+        "message": "Profile updated successfully",
+        "address": clinic.address,
+        "image_urls": clinic.image_urls or []
+    }
+
+@router.post("/clinic/upload-image")
+async def upload_clinic_image(
+    clinic_id: str = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Upload clinic image and store binary data in database"""
+    
+    # Validate clinic exists
+    result = await db.execute(select(Clinic).where(Clinic.clinic_id == clinic_id))
+    clinic = result.scalar_one_or_none()
+    
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found"
+        )
+    
+    # Check current image count
+    current_images = clinic.image_urls or []
+    if len(current_images) >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 5 images allowed. Please delete an image first."
+        )
+    
+    # Validate file type - accept any image type
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Please upload an image file."
+        )
+    
+    # Validate file size (max 5MB)
+    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds 5MB limit. Please upload a smaller image."
+        )
+    
+    # Convert to base64
+    import base64
+    image_data_b64 = base64.b64encode(contents).decode('utf-8')
+    
+    # Find or create ClinicImage record for this clinic
+    result = await db.execute(select(ClinicImage).where(ClinicImage.clinic_id == clinic_id))
+    clinic_image_record = result.scalar_one_or_none()
+    
+    if not clinic_image_record:
+        # Create new record with first image
+        clinic_image_record = ClinicImage(
+            clinic_id=clinic_id,
+            images=[{
+                "image_data": image_data_b64,
+                "image_type": file.content_type,
+                "uploaded_at": datetime.now().isoformat()
+            }]
+        )
+        db.add(clinic_image_record)
+        await db.flush()
+    else:
+        # Fill empty slots first (null values)
+        current_images = list(clinic_image_record.images) if clinic_image_record.images else []
+        
+        # Count non-null images
+        non_null_count = sum(1 for img in current_images if img is not None)
+        
+        if non_null_count >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum 5 images allowed. Please delete an image first."
+            )
+        
+        # Find first empty slot (null)
+        empty_slot_index = None
+        for i, img in enumerate(current_images):
+            if img is None:
+                empty_slot_index = i
+                break
+        
+        if empty_slot_index is not None:
+            # Fill the empty slot
+            current_images[empty_slot_index] = {
+                "image_data": image_data_b64,
+                "image_type": file.content_type,
+                "uploaded_at": datetime.now().isoformat()
+            }
+        else:
+            # No empty slots, append new image
+            current_images.append({
+                "image_data": image_data_b64,
+                "image_type": file.content_type,
+                "uploaded_at": datetime.now().isoformat()
+            })
+        
+        clinic_image_record.images = current_images
+        await db.flush()
+    
+    # Sync clinic.image_urls - keep nulls for deleted images
+    all_images = list(clinic_image_record.images) if clinic_image_record.images else []
+    new_urls = []
+    for i, img in enumerate(all_images):
+        if img is not None:
+            new_urls.append(f"/auth/clinic/image/{clinic_id}/{i}")
+        else:
+            new_urls.append(None)
+    clinic.image_urls = new_urls
+    
+    await db.commit()
+    
+    # Return the filled slot index
+    filled_index = None
+    for i, img in enumerate(all_images):
+        if img is not None and (empty_slot_index is None or i == empty_slot_index):
+            if empty_slot_index is not None:
+                filled_index = i
+                break
+            elif i == len(all_images) - 1:
+                filled_index = i
+                break
+    
+    return {
+        "message": "Image uploaded successfully",
+        "image_url": f"/auth/clinic/image/{clinic_id}/{filled_index}" if filled_index is not None else "",
+        "filled_index": filled_index,
+        "total_images": sum(1 for img in all_images if img is not None),
+        "image_urls": new_urls
+    }
+
+@router.get("/clinic/image/{clinic_id}/{image_index}")
+async def get_clinic_image(
+    clinic_id: str,
+    image_index: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Serve clinic image from JSON array in database"""
+    import base64
+    
+    result = await db.execute(select(ClinicImage).where(ClinicImage.clinic_id == clinic_id))
+    clinic_image_record = result.scalar_one_or_none()
+    
+    if not clinic_image_record or not clinic_image_record.images:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic images not found"
+        )
+    
+    images = clinic_image_record.images
+    if image_index < 0 or image_index >= len(images):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Image index out of range"
+        )
+    
+    image_data = images[image_index]
+    image_bytes = base64.b64decode(image_data["image_data"])
+    
+    from fastapi.responses import Response
+    return Response(
+        content=image_bytes,
+        media_type=image_data["image_type"]
+    )
+
+@router.delete("/clinic/image/{clinic_id}/{image_index}")
+async def delete_clinic_image(
+    clinic_id: str,
+    image_index: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a clinic image by index - renumbers remaining images"""
+    # Get clinic image record
+    result = await db.execute(select(ClinicImage).where(ClinicImage.clinic_id == clinic_id))
+    clinic_image_record = result.scalar_one_or_none()
+    
+    if not clinic_image_record or not clinic_image_record.images:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic images not found"
+        )
+    
+    images = clinic_image_record.images or []
+    if image_index < 0 or image_index >= len(images):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Image index out of range"
+        )
+    
+    # Remove the image at index and renumber remaining
+    remaining_images = [img for i, img in enumerate(images) if i != image_index]
+    clinic_image_record.images = remaining_images
+    
+    # Update clinic.image_urls with renumbered URLs
+    clinic_result = await db.execute(select(Clinic).where(Clinic.clinic_id == clinic_id))
+    clinic = clinic_result.scalar_one_or_none()
+    if clinic:
+        new_urls = [f"/auth/clinic/image/{clinic_id}/{i}" for i in range(len(remaining_images))]
+        clinic.image_urls = new_urls
+    
+    await db.commit()
+    
+    return {
+        "message": "Image deleted successfully", 
+        "deleted_index": image_index,
+        "total_images": len(remaining_images),
+        "image_urls": new_urls if clinic else []
+    }
 
 @router.delete("/clinic/delete")
 async def clinic_delete_account(

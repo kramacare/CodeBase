@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Phone, Lock, Trash2, User, LogOut, Building2, Mail } from "lucide-react";
+import { ArrowLeft, Phone, Lock, Trash2, User, LogOut, Building2, Mail, MapPin, ImagePlus, X } from "lucide-react";
 
 const ClinicProfile = () => {
   const navigate = useNavigate();
@@ -28,6 +28,10 @@ const ClinicProfile = () => {
   
   // Form states
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -58,6 +62,8 @@ const ClinicProfile = () => {
           const data = await response.json();
           setDbProfile(data);
           setPhone(data.phone || "");
+          setAddress(data.address || "");
+          setImageUrls(data.image_urls || []);
         } else {
           setMessage({text: "Failed to fetch clinic data", type: "error"});
         }
@@ -109,6 +115,159 @@ const ClinicProfile = () => {
       } else {
         const error = await response.json();
         setMessage({text: error.detail || "Failed to update phone number", type: "error"});
+      }
+    } catch (error) {
+      setMessage({text: "Network error. Please try again.", type: "error"});
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      const availableSlots = 5 - imageUrls.length;
+      const filesToUpload = files.slice(0, availableSlots);
+      
+      // Check file sizes (max 5MB each)
+      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+      const oversized = filesToUpload.filter(f => f.size > MAX_SIZE);
+      if (oversized.length > 0) {
+        setMessage({text: `${oversized[0].name} is above 5MB`, type: "error"});
+        return;
+      }
+      
+      setSelectedFiles(filesToUpload);
+    }
+  };
+
+  const handleUploadImage = async () => {
+    console.log("=== UPLOAD START ===");
+    console.log("selectedFiles:", selectedFiles.length);
+    console.log("loggedInClinicId:", loggedInClinicId);
+    console.log("current imageUrls:", imageUrls.length);
+    
+    if (selectedFiles.length === 0 || !loggedInClinicId) {
+      setMessage({text: "Please select files first", type: "error"});
+      return;
+    }
+
+    if (imageUrls.length >= 5) {
+      setMessage({text: "Maximum 5 images allowed", type: "error"});
+      return;
+    }
+
+    setUploading(true);
+    let uploadedCount = 0;
+    let failedCount = 0;
+
+    for (const file of selectedFiles) {
+      console.log("Uploading file:", file.name, file.size, "bytes");
+      
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("clinic_id", loggedInClinicId);
+
+      try {
+        const response = await fetch("http://localhost:8000/auth/clinic/upload-image", {
+          method: "POST",
+          body: formData
+        });
+
+        console.log("Response status:", response.status);
+
+        if (response.ok) {
+          uploadedCount++;
+        } else {
+          const error = await response.json();
+          console.error("Upload failed:", error.detail);
+          failedCount++;
+        }
+      } catch (error) {
+        console.error("Upload error:", error);
+        failedCount++;
+      }
+    }
+
+    console.log("=== UPLOAD COMPLETE ===");
+    console.log("uploadedCount:", uploadedCount);
+    console.log("failedCount:", failedCount);
+
+    setUploading(false);
+    setSelectedFiles([]);
+
+    if (uploadedCount > 0) {
+      // ALWAYS fetch fresh data from API - this ensures correct unique URLs
+      const dataResponse = await fetch(`http://localhost:8000/auth/clinic/data?clinic_id=${loggedInClinicId}`);
+      if (dataResponse.ok) {
+        const profileData = await dataResponse.json();
+        setImageUrls(profileData.image_urls || []);
+        setDbProfile(profileData);
+        console.log("Updated imageUrls from API:", profileData.image_urls);
+        setMessage({text: `${uploadedCount} image(s) uploaded successfully!`, type: "success"});
+      } else {
+        setMessage({text: `${uploadedCount} image(s) uploaded but refresh failed`, type: "error"});
+      }
+    }
+    if (failedCount > 0) {
+      setMessage({text: `${failedCount} image(s) failed to upload`, type: "error"});
+    }
+  };
+
+  const handleRemoveImage = async (index: number) => {
+    if (!loggedInClinicId) return;
+    
+    try {
+      const response = await fetch(`http://localhost:8000/auth/clinic/image/${loggedInClinicId}/${index}`, {
+        method: "DELETE"
+      });
+      
+      if (response.ok) {
+        // Refresh the entire page to show correct images
+        window.location.reload();
+      } else {
+        setMessage({text: "Failed to delete image", type: "error"});
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      setMessage({text: "Error deleting image", type: "error"});
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!loggedInClinicId) {
+      setMessage({text: "No logged-in clinic found", type: "error"});
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:8000/auth/clinic/update-profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clinic_id: loggedInClinicId,
+          address: address,
+          image_urls: imageUrls
+        })
+      });
+
+      if (response.ok) {
+        setMessage({text: "Profile updated successfully!", type: "success"});
+        const fetchUpdatedData = async () => {
+          try {
+            const dataResponse = await fetch(`http://localhost:8000/auth/clinic/data?clinic_id=${loggedInClinicId}`);
+            if (dataResponse.ok) {
+              const data = await dataResponse.json();
+              setDbProfile(data);
+              setAddress(data.address || "");
+              setImageUrls(data.image_urls || []);
+            }
+          } catch (error) {
+            console.error("Failed to refresh data:", error);
+          }
+        };
+        fetchUpdatedData();
+      } else {
+        const error = await response.json();
+        setMessage({text: error.detail || "Failed to update profile", type: "error"});
       }
     } catch (error) {
       setMessage({text: "Network error. Please try again.", type: "error"});
@@ -252,27 +411,23 @@ const ClinicProfile = () => {
             <div className="p-6 bg-gray-50 border-t">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
+                  <span className="text-gray-500">Clinic ID:</span>
+                  <p className="font-medium text-gray-900">{dbProfile.clinic_id}</p>
+                </div>
+                <div>
                   <span className="text-gray-500">Phone:</span>
                   <p className="font-medium text-gray-900">{dbProfile.phone}</p>
                 </div>
-                <div>
+                <div className="md:col-span-2">
                   <span className="text-gray-500">Address:</span>
-                  <p className="font-medium text-gray-900">{dbProfile.address}</p>
+                  <p className="font-medium text-gray-900">{dbProfile.address || "Not set"}</p>
                 </div>
-                <div>
-                  <span className="text-gray-500">Doctor Name:</span>
-                  <p className="font-medium text-gray-900">{dbProfile.doctor_name}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Clinic ID:</span>
-                  <p className="font-medium text-gray-900 font-mono">{dbProfile.clinic_id}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Member Since:</span>
-                  <p className="font-medium text-gray-900">
-                    {new Date(dbProfile.created_at).toLocaleDateString()}
-                  </p>
-                </div>
+                {dbProfile.image_urls && dbProfile.image_urls.length > 0 && (
+                  <div className="md:col-span-2">
+                    <span className="text-gray-500">Images:</span>
+                    <p className="font-medium text-gray-900">{dbProfile.image_urls.length} image(s) stored</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -311,6 +466,122 @@ const ClinicProfile = () => {
                 className="w-full bg-[#00555A] hover:bg-[#004455] text-white"
               >
                 Update Phone Number
+              </Button>
+            </div>
+          </div>
+
+          {/* Change Address */}
+          <div className="rounded-2xl bg-white shadow-lg p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+                <MapPin className="h-6 w-6 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Change Address</h2>
+                <p className="text-sm text-gray-500">Update clinic location</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Current Address:</p>
+                <p className="font-medium text-gray-900">{dbProfile?.address || "Not set"}</p>
+              </div>
+              <div>
+                <Label htmlFor="address" className="text-sm font-medium text-gray-700">New Address</Label>
+                <Input
+                  id="address"
+                  placeholder="Enter full address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <Button 
+                onClick={handleUpdateProfile}
+                disabled={!address}
+                className="w-full bg-[#00555A] hover:bg-[#004455] text-white"
+              >
+                Update Address
+              </Button>
+            </div>
+          </div>
+
+          {/* Upload Clinic Images */}
+          <div className="rounded-2xl bg-white shadow-lg p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100">
+                <ImagePlus className="h-6 w-6 text-purple-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Clinic Images</h2>
+                <p className="text-sm text-gray-500">Add up to 5 image URLs</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Current Images - only show non-null URLs */}
+              {imageUrls.filter(url => url !== null && url !== undefined).length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {imageUrls.map((url, idx) => (
+                    url ? (
+                      <div key={idx} className="relative">
+                        <img src={`http://localhost:8000${url}`} alt={`Clinic ${idx + 1}`} className="w-full h-20 object-cover rounded-lg" />
+                        <button
+                          onClick={() => handleRemoveImage(idx)}
+                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"
+                          title="Remove image"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : null
+                  ))}
+                </div>
+              )}
+              
+              {/* Add New Image */}
+              {imageUrls.length < 5 && (
+                <div className="space-y-3">
+                  <div className="flex gap-2 items-center">
+                    {/* Hidden file input */}
+                    <input
+                      type="file"
+                      id="file-upload"
+                      accept="image/*"
+                      multiple
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    {/* Custom file upload button */}
+                    <label
+                      htmlFor="file-upload"
+                      className="flex-1 flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      <ImagePlus className="h-5 w-5 text-gray-500" />
+                      <span className="text-sm text-gray-600 truncate">
+                        {selectedFiles.length > 0 ? `${selectedFiles.length} file(s) selected` : "Choose files..."}
+                      </span>
+                    </label>
+                    <Button 
+                      onClick={handleUploadImage} 
+                      variant="outline"
+                      disabled={selectedFiles.length === 0 || uploading}
+                    >
+                      {uploading ? "Uploading..." : "Upload"}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-400">Max 5MB. Supported: JPG, PNG, GIF, WebP</p>
+                </div>
+              )}
+              
+              <p className="text-xs text-gray-500">{imageUrls.length}/5 images • Stored in database</p>
+              
+              <Button 
+                onClick={handleUpdateProfile}
+                className="w-full bg-[#00555A] hover:bg-[#004455] text-white"
+              >
+                Save Images
               </Button>
             </div>
           </div>
