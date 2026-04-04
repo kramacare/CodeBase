@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { ArrowLeft, MapPin, Phone, Star, Clock, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ArrowLeft, MapPin, Phone, Star, Clock, ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Review {
@@ -29,6 +29,7 @@ const ClinicDetails = () => {
   const [dates, setDates] = useState<any[]>([]);
   const [userReactions, setUserReactions] = useState<{[key: number]: string}>({});
   const [patientId, setPatientId] = useState<string>("");
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (message) {
@@ -78,7 +79,6 @@ const ClinicDetails = () => {
           );
           if (response.ok) {
             const data = await response.json();
-            // Convert string keys to number keys
             const reactions: {[key: number]: string} = {};
             Object.entries(data.reactions).forEach(([key, value]) => {
               reactions[parseInt(key)] = value as string;
@@ -110,14 +110,7 @@ const ClinicDetails = () => {
         setReviews(reviews.map(r => 
           r.id === reviewId ? { ...r, likes: data.likes, dislikes: data.dislikes } : r
         ));
-        // Update user reaction state
-        if (data.user_reaction) {
-          setUserReactions({ ...userReactions, [reviewId]: data.user_reaction });
-        } else {
-          const newReactions = { ...userReactions };
-          delete newReactions[reviewId];
-          setUserReactions(newReactions);
-        }
+        setUserReactions({ ...userReactions, [reviewId]: data.user_reaction });
       }
     } catch (error) {
       console.error("Error liking review:", error);
@@ -137,14 +130,7 @@ const ClinicDetails = () => {
         setReviews(reviews.map(r => 
           r.id === reviewId ? { ...r, likes: data.likes, dislikes: data.dislikes } : r
         ));
-        // Update user reaction state
-        if (data.user_reaction) {
-          setUserReactions({ ...userReactions, [reviewId]: data.user_reaction });
-        } else {
-          const newReactions = { ...userReactions };
-          delete newReactions[reviewId];
-          setUserReactions(newReactions);
-        }
+        setUserReactions({ ...userReactions, [reviewId]: data.user_reaction });
       }
     } catch (error) {
       console.error("Error disliking review:", error);
@@ -351,6 +337,33 @@ const ClinicDetails = () => {
               🗺️ Map placeholder - {clinic.address}
             </div>
 
+            {/* Clinic Images Gallery - only show valid URLs */}
+            {clinic.image_urls && clinic.image_urls.filter((url: string | null) => url !== null && url !== undefined).length > 0 && (
+              <div className="mt-6">
+                <h2 className="text-lg font-semibold text-foreground mb-3">Clinic Photos</h2>
+                <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                  {clinic.image_urls.map((url: string | null, idx: number) => (
+                    url ? (
+                      <div 
+                        key={idx} 
+                        className="relative aspect-square rounded-lg overflow-hidden border border-border cursor-pointer"
+                        onClick={() => setSelectedImageIndex(idx)}
+                      >
+                        <img 
+                          src={`http://localhost:8000${url}`} 
+                          alt={`Clinic photo ${idx + 1}`}
+                          className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/placeholder-clinic.jpg';
+                          }}
+                        />
+                      </div>
+                    ) : null
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="mt-6">
               <h2 className="text-lg font-semibold text-foreground">Doctor</h2>
               <div className="mt-3 rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -515,6 +528,63 @@ const ClinicDetails = () => {
           </div>
         )}
       </main>
+
+      {/* Image Modal */}
+      {selectedImageIndex !== null && clinic?.image_urls && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setSelectedImageIndex(null)}
+        >
+          <div className="relative max-w-4xl w-full flex items-center justify-center">
+            {/* Previous Button */}
+            {selectedImageIndex > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedImageIndex(selectedImageIndex - 1);
+                }}
+                className="absolute left-4 z-10 p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
+              >
+                <ChevronLeft className="h-8 w-8 text-white" />
+              </button>
+            )}
+
+            {/* Image */}
+            <img
+              src={`http://localhost:8000${clinic.image_urls[selectedImageIndex]}`}
+              alt={`Clinic photo ${selectedImageIndex + 1}`}
+              className="max-h-[80vh] max-w-full object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+
+            {/* Next Button */}
+            {selectedImageIndex < clinic.image_urls.length - 1 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedImageIndex(selectedImageIndex + 1);
+                }}
+                className="absolute right-4 z-10 p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
+              >
+                <ChevronRight className="h-8 w-8 text-white" />
+              </button>
+            )}
+
+            {/* Close Button */}
+            <button
+              onClick={() => setSelectedImageIndex(null)}
+              className="absolute top-4 right-4 z-10 p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
+            >
+              <X className="h-6 w-6 text-white" />
+            </button>
+
+            {/* Image Counter */}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white/20 px-4 py-2 rounded-full text-white text-sm">
+              {selectedImageIndex + 1} / {clinic.image_urls.length}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

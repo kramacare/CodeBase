@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, JSON, ARRAY, LargeBinary
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
@@ -14,11 +14,22 @@ class Clinic(Base):
     password = Column(String, nullable=False)
     phone = Column(String, nullable=False)
     address = Column(String, nullable=False)
+    image_urls = Column(JSON, default=list)  # Store image IDs for reference
     doctor_name = Column(String, nullable=True)
-    available = Column(Boolean, default=True)  # True = available today, False = not available
-    start = Column(Integer, nullable=True)  # Operating hours start (e.g., 9)
-    end = Column(Integer, nullable=True)    # Operating hours end (e.g., 17)
+    available = Column(Boolean, default=True)
+    start = Column(Integer, nullable=True)
+    end = Column(Integer, nullable=True)
+    booking_cutoff_minutes = Column(Integer, default=15)  # Stop booking X minutes before end
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class ClinicImage(Base):
+    __tablename__ = "clinic_images"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_id = Column(String, unique=True, nullable=False, index=True)  # One row per clinic
+    images = Column(JSON, default=list)  # Array of {image_data: "base64...", image_type: "image/jpeg"}
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 class Time(Base):
     __tablename__ = "times"
@@ -110,7 +121,7 @@ class Review(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ReviewReaction(Base):
-    """Model to track which users have liked/disliked reviews"""
+    """Track which patients liked/disliked which reviews"""
     __tablename__ = "review_reactions"
     
     id = Column(Integer, primary_key=True, index=True)

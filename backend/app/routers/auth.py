@@ -2,12 +2,14 @@ import json
 import random
 import string
 import re
+import os
+import uuid
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.database.db import get_db
-from app.database.models import Clinic, Patient, OTPVerification, Appointment, CompletedAppointment, Time, Review, ReviewReaction
+from app.database.models import Clinic, Patient, OTPVerification, Appointment, CompletedAppointment, Time, Review, ReviewReaction, ClinicImage
 from app.schemas import (
     ClinicSignup, ClinicLogin, PatientSignup, PatientLogin,
     ChangePasswordRequest, ChangePhoneRequest, DeleteAccountRequest,
@@ -225,6 +227,7 @@ async def get_clinic_data(
         "email": clinic.email,
         "phone": clinic.phone,
         "address": clinic.address,
+        "image_urls": clinic.image_urls or [],
         "doctor_name": clinic.doctor_name,
         "available": clinic.available,
         "created_at": clinic.created_at
@@ -306,6 +309,257 @@ async def clinic_change_password(
     await db.commit()
     
     return {"message": "Password changed successfully"}
+
+@router.put("/clinic/update-profile")
+async def update_clinic_profile(
+    request: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update clinic address and images"""
+    clinic_id = request.get("clinic_id")
+    address = request.get("address")
+    image_urls = request.get("image_urls")
+    
+    if not clinic_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="clinic_id is required"
+        )
+    
+    result = await db.execute(select(Clinic).where(Clinic.clinic_id == clinic_id))
+    clinic = result.scalar_one_or_none()
+    
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found"
+        )
+    
+    # Update address if provided
+    if address is not None:
+        clinic.address = address
+    
+    # Update image URLs if provided (max 5 images)
+    if image_urls is not None:
+        # Ensure only 5 images max
+        clinic.image_urls = image_urls[:5] if len(image_urls) > 5 else image_urls
+    
+    await db.commit()
+    
+    return {
+        "message": "Profile updated successfully",
+        "address": clinic.address,
+        "image_urls": clinic.image_urls or []
+    }
+
+@router.post("/clinic/upload-image")
+async def upload_clinic_image(
+    clinic_id: str = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Upload clinic image and store binary data in database"""
+    
+    # Validate clinic exists
+    result = await db.execute(select(Clinic).where(Clinic.clinic_id == clinic_id))
+    clinic = result.scalar_one_or_none()
+    
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found"
+        )
+    
+    # Check current image count
+    current_images = clinic.image_urls or []
+    if len(current_images) >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 5 images allowed. Please delete an image first."
+        )
+    
+    # Validate file type - accept any image type
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Please upload an image file."
+        )
+    
+    # Validate file size (max 5MB)
+    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds 5MB limit. Please upload a smaller image."
+        )
+    
+    # Convert to base64
+    import base64
+    image_data_b64 = base64.b64encode(contents).decode('utf-8')
+    
+    # Find or create ClinicImage record for this clinic
+    result = await db.execute(select(ClinicImage).where(ClinicImage.clinic_id == clinic_id))
+    clinic_image_record = result.scalar_one_or_none()
+    
+    if not clinic_image_record:
+        # Create new record with first image
+        clinic_image_record = ClinicImage(
+            clinic_id=clinic_id,
+            images=[{
+                "image_data": image_data_b64,
+                "image_type": file.content_type,
+                "uploaded_at": datetime.now().isoformat()
+            }]
+        )
+        db.add(clinic_image_record)
+        await db.flush()
+    else:
+        # Fill empty slots first (null values)
+        current_images = list(clinic_image_record.images) if clinic_image_record.images else []
+        
+        # Count non-null images
+        non_null_count = sum(1 for img in current_images if img is not None)
+        
+        if non_null_count >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum 5 images allowed. Please delete an image first."
+            )
+        
+        # Find first empty slot (null)
+        empty_slot_index = None
+        for i, img in enumerate(current_images):
+            if img is None:
+                empty_slot_index = i
+                break
+        
+        if empty_slot_index is not None:
+            # Fill the empty slot
+            current_images[empty_slot_index] = {
+                "image_data": image_data_b64,
+                "image_type": file.content_type,
+                "uploaded_at": datetime.now().isoformat()
+            }
+        else:
+            # No empty slots, append new image
+            current_images.append({
+                "image_data": image_data_b64,
+                "image_type": file.content_type,
+                "uploaded_at": datetime.now().isoformat()
+            })
+        
+        clinic_image_record.images = current_images
+        await db.flush()
+    
+    # Sync clinic.image_urls - keep nulls for deleted images
+    all_images = list(clinic_image_record.images) if clinic_image_record.images else []
+    new_urls = []
+    for i, img in enumerate(all_images):
+        if img is not None:
+            new_urls.append(f"/auth/clinic/image/{clinic_id}/{i}")
+        else:
+            new_urls.append(None)
+    clinic.image_urls = new_urls
+    
+    await db.commit()
+    
+    # Return the filled slot index
+    filled_index = None
+    for i, img in enumerate(all_images):
+        if img is not None and (empty_slot_index is None or i == empty_slot_index):
+            if empty_slot_index is not None:
+                filled_index = i
+                break
+            elif i == len(all_images) - 1:
+                filled_index = i
+                break
+    
+    return {
+        "message": "Image uploaded successfully",
+        "image_url": f"/auth/clinic/image/{clinic_id}/{filled_index}" if filled_index is not None else "",
+        "filled_index": filled_index,
+        "total_images": sum(1 for img in all_images if img is not None),
+        "image_urls": new_urls
+    }
+
+@router.get("/clinic/image/{clinic_id}/{image_index}")
+async def get_clinic_image(
+    clinic_id: str,
+    image_index: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Serve clinic image from JSON array in database"""
+    import base64
+    
+    result = await db.execute(select(ClinicImage).where(ClinicImage.clinic_id == clinic_id))
+    clinic_image_record = result.scalar_one_or_none()
+    
+    if not clinic_image_record or not clinic_image_record.images:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic images not found"
+        )
+    
+    images = clinic_image_record.images
+    if image_index < 0 or image_index >= len(images):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Image index out of range"
+        )
+    
+    image_data = images[image_index]
+    image_bytes = base64.b64decode(image_data["image_data"])
+    
+    from fastapi.responses import Response
+    return Response(
+        content=image_bytes,
+        media_type=image_data["image_type"]
+    )
+
+@router.delete("/clinic/image/{clinic_id}/{image_index}")
+async def delete_clinic_image(
+    clinic_id: str,
+    image_index: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a clinic image by index - renumbers remaining images"""
+    # Get clinic image record
+    result = await db.execute(select(ClinicImage).where(ClinicImage.clinic_id == clinic_id))
+    clinic_image_record = result.scalar_one_or_none()
+    
+    if not clinic_image_record or not clinic_image_record.images:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic images not found"
+        )
+    
+    images = clinic_image_record.images or []
+    if image_index < 0 or image_index >= len(images):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Image index out of range"
+        )
+    
+    # Remove the image at index and renumber remaining
+    remaining_images = [img for i, img in enumerate(images) if i != image_index]
+    clinic_image_record.images = remaining_images
+    
+    # Update clinic.image_urls with renumbered URLs
+    clinic_result = await db.execute(select(Clinic).where(Clinic.clinic_id == clinic_id))
+    clinic = clinic_result.scalar_one_or_none()
+    if clinic:
+        new_urls = [f"/auth/clinic/image/{clinic_id}/{i}" for i in range(len(remaining_images))]
+        clinic.image_urls = new_urls
+    
+    await db.commit()
+    
+    return {
+        "message": "Image deleted successfully", 
+        "deleted_index": image_index,
+        "total_images": len(remaining_images),
+        "image_urls": new_urls if clinic else []
+    }
 
 @router.delete("/clinic/delete")
 async def clinic_delete_account(
@@ -805,8 +1059,10 @@ async def create_appointment(
 ):
     """
     Create a new appointment with auto-incrementing token number.
-    Token format: T-1, T-2, T-3, etc.
+    Stop booking X minutes before clinic end time.
     """
+    from datetime import datetime, timedelta
+    
     clinic_id = request.get("clinic_id")
     patient_id = request.get("patient_id")
     patient_name = request.get("patient_name")
@@ -816,12 +1072,41 @@ async def create_appointment(
     date = request.get("date")
     time = request.get("time")
     
-    # Validate required fields (patient_phone is optional)
+    # Validate required fields
     if not all([clinic_id, patient_id, patient_name, patient_email, date, time]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing required fields"
         )
+    
+    # Get clinic details
+    result = await db.execute(
+        select(Clinic).where(Clinic.clinic_id == clinic_id)
+    )
+    clinic = result.scalar_one_or_none()
+    
+    if not clinic:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clinic not found"
+        )
+    
+    # Check if booking is still allowed (cutoff time)
+    if clinic.end is not None:
+        now = datetime.now()
+        cutoff_minutes = clinic.booking_cutoff_minutes or 15
+        
+        # Create today's end time datetime
+        end_hour = clinic.end
+        end_time_today = now.replace(hour=end_hour, minute=0, second=0, microsecond=0)
+        cutoff_time = end_time_today - timedelta(minutes=cutoff_minutes)
+        
+        # If current time is past cutoff, reject booking
+        if now >= cutoff_time:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Booking closed — doctor will not be available before end time. Last booking at {cutoff_time.strftime('%H:%M')}."
+            )
     
     # Check if patient already has an appointment for this clinic on this date
     result = await db.execute(
@@ -878,7 +1163,6 @@ async def create_appointment(
         "patient_phone": patient_phone,
         "patient_email": patient_email,
         "clinic_id": clinic_id,
-        "doctor_name": doctor_name,
         "date": date,
         "time": time
     }
@@ -1252,55 +1536,35 @@ async def like_review(
             detail="Review not found"
         )
     
-    # Check if patient already has a reaction to this review
+    # Check if patient already reacted to this review
     result = await db.execute(
         select(ReviewReaction).where(
             ReviewReaction.review_id == review_id,
             ReviewReaction.patient_id == patient_id
         )
     )
-    existing_reaction = result.scalar_one_or_none()
+    existing = result.scalar_one_or_none()
     
-    if existing_reaction:
-        if existing_reaction.reaction_type == "like":
-            # Already liked - remove the like (toggle off)
-            await db.delete(existing_reaction)
+    if existing:
+        if existing.reaction_type == "like":
+            # Already liked - remove it (toggle off)
+            await db.delete(existing)
             review.likes = max((review.likes or 0) - 1, 0)
             await db.commit()
-            return {
-                "message": "Like removed",
-                "likes": review.likes,
-                "dislikes": review.dislikes,
-                "user_reaction": None
-            }
+            return {"message": "Like removed", "likes": review.likes, "dislikes": review.dislikes, "user_reaction": None}
         else:
             # Previously disliked - switch to like
-            existing_reaction.reaction_type = "like"
+            existing.reaction_type = "like"
             review.dislikes = max((review.dislikes or 0) - 1, 0)
             review.likes = (review.likes or 0) + 1
             await db.commit()
-            return {
-                "message": "Switched to like",
-                "likes": review.likes,
-                "dislikes": review.dislikes,
-                "user_reaction": "like"
-            }
+            return {"message": "Switched to like", "likes": review.likes, "dislikes": review.dislikes, "user_reaction": "like"}
     else:
-        # No previous reaction - add like
-        new_reaction = ReviewReaction(
-            review_id=review_id,
-            patient_id=patient_id,
-            reaction_type="like"
-        )
-        db.add(new_reaction)
+        # New like
+        db.add(ReviewReaction(review_id=review_id, patient_id=patient_id, reaction_type="like"))
         review.likes = (review.likes or 0) + 1
         await db.commit()
-        return {
-            "message": "Review liked",
-            "likes": review.likes,
-            "dislikes": review.dislikes,
-            "user_reaction": "like"
-        }
+        return {"message": "Review liked", "likes": review.likes, "dislikes": review.dislikes, "user_reaction": "like"}
 
 @router.post("/reviews/dislike")
 async def dislike_review(
@@ -1321,55 +1585,35 @@ async def dislike_review(
             detail="Review not found"
         )
     
-    # Check if patient already has a reaction to this review
+    # Check if patient already reacted to this review
     result = await db.execute(
         select(ReviewReaction).where(
             ReviewReaction.review_id == review_id,
             ReviewReaction.patient_id == patient_id
         )
     )
-    existing_reaction = result.scalar_one_or_none()
+    existing = result.scalar_one_or_none()
     
-    if existing_reaction:
-        if existing_reaction.reaction_type == "dislike":
-            # Already disliked - remove the dislike (toggle off)
-            await db.delete(existing_reaction)
+    if existing:
+        if existing.reaction_type == "dislike":
+            # Already disliked - remove it (toggle off)
+            await db.delete(existing)
             review.dislikes = max((review.dislikes or 0) - 1, 0)
             await db.commit()
-            return {
-                "message": "Dislike removed",
-                "likes": review.likes,
-                "dislikes": review.dislikes,
-                "user_reaction": None
-            }
+            return {"message": "Dislike removed", "likes": review.likes, "dislikes": review.dislikes, "user_reaction": None}
         else:
             # Previously liked - switch to dislike
-            existing_reaction.reaction_type = "dislike"
+            existing.reaction_type = "dislike"
             review.likes = max((review.likes or 0) - 1, 0)
             review.dislikes = (review.dislikes or 0) + 1
             await db.commit()
-            return {
-                "message": "Switched to dislike",
-                "likes": review.likes,
-                "dislikes": review.dislikes,
-                "user_reaction": "dislike"
-            }
+            return {"message": "Switched to dislike", "likes": review.likes, "dislikes": review.dislikes, "user_reaction": "dislike"}
     else:
-        # No previous reaction - add dislike
-        new_reaction = ReviewReaction(
-            review_id=review_id,
-            patient_id=patient_id,
-            reaction_type="dislike"
-        )
-        db.add(new_reaction)
+        # New dislike
+        db.add(ReviewReaction(review_id=review_id, patient_id=patient_id, reaction_type="dislike"))
         review.dislikes = (review.dislikes or 0) + 1
         await db.commit()
-        return {
-            "message": "Review disliked",
-            "likes": review.likes,
-            "dislikes": review.dislikes,
-            "user_reaction": "dislike"
-        }
+        return {"message": "Review disliked", "likes": review.likes, "dislikes": review.dislikes, "user_reaction": "dislike"}
 
 @router.get("/reviews/user-reaction")
 async def get_user_reactions(
@@ -1377,8 +1621,7 @@ async def get_user_reactions(
     patient_id: str = Query(..., description="Patient ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all reactions by a patient for reviews of a specific clinic"""
-    # Get all reviews for this clinic
+    """Get patient's reactions for all reviews of a clinic"""
     result = await db.execute(
         select(Review).where(Review.clinic_id == clinic_id)
     )
@@ -1388,7 +1631,6 @@ async def get_user_reactions(
     if not review_ids:
         return {"reactions": {}}
     
-    # Get patient's reactions for these reviews
     result = await db.execute(
         select(ReviewReaction).where(
             ReviewReaction.review_id.in_(review_ids),
@@ -1397,8 +1639,87 @@ async def get_user_reactions(
     )
     reactions = result.scalars().all()
     
-    # Build map of review_id -> reaction_type
-    reaction_map = {str(r.review_id): r.reaction_type for r in reactions}
+    return {"reactions": {str(r.review_id): r.reaction_type for r in reactions}}
+
+@router.get("/clinic/patients/search")
+async def search_clinic_patients(
+    clinic_id: str = Query(..., description="Clinic ID"),
+    from_date: str = Query(None, description="From date (YYYY-MM-DD)"),
+    to_date: str = Query(None, description="To date (YYYY-MM-DD)"),
+    patient_id: str = Query(None, description="Patient ID"),
+    email: str = Query(None, description="Patient email"),
+    phone: str = Query(None, description="Patient phone"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Search patients by date range, patient ID, email, or phone in both appointments and completed_appointments"""
+    
+    # Helper function to build query with filters
+    def build_query(model, clinic_id, from_date, to_date, patient_id, email, phone):
+        query = select(model).where(model.clinic_id == clinic_id)
+        
+        if from_date and to_date:
+            query = query.where(model.date >= from_date, model.date <= to_date)
+        
+        if patient_id:
+            query = query.where(model.patient_id == patient_id)
+        
+        if email:
+            query = query.where(model.patient_email.ilike(f"%{email}%"))
+        
+        if phone:
+            query = query.where(model.patient_phone.ilike(f"%{phone}%"))
+        
+        return query.order_by(model.date.desc(), model.time.desc())
+    
+    # Search appointments table
+    appointments_query = build_query(Appointment, clinic_id, from_date, to_date, patient_id, email, phone)
+    result = await db.execute(appointments_query)
+    appointments = result.scalars().all()
+    
+    # Search completed_appointments table
+    completed_query = build_query(CompletedAppointment, clinic_id, from_date, to_date, patient_id, email, phone)
+    result = await db.execute(completed_query)
+    completed = result.scalars().all()
+    
+    # Combine and format results
+    patients = []
+    
+    # Add appointments
+    for apt in appointments:
+        patients.append({
+            "appointment_token": apt.appointment_token,
+            "patient_name": apt.patient_name,
+            "patient_phone": apt.patient_phone,
+            "patient_id": apt.patient_id,
+            "patient_email": apt.patient_email,
+            "date": apt.date,
+            "time": apt.time,
+            "status": apt.status,
+            "source": "appointment"
+        })
+    
+    # Add completed appointments
+    for apt in completed:
+        patients.append({
+            "appointment_token": apt.appointment_token,
+            "patient_name": apt.patient_name,
+            "patient_phone": apt.patient_phone,
+            "patient_id": apt.patient_id,
+            "patient_email": apt.patient_email,
+            "date": apt.date,
+            "time": apt.time,
+            "status": "completed",
+            "source": "completed"
+        })
+    
+    # Remove duplicates by patient_id + date + time
+    seen = set()
+    unique_patients = []
+    for p in patients:
+        key = (p["patient_id"], p["date"], p["time"])
+        if key not in seen:
+            seen.add(key)
+            unique_patients.append(p)
     
     return {"reactions": reaction_map}
 
@@ -1486,3 +1807,4 @@ async def create_token(
         "patientName": patient_name,
         "date": today
     }
+    return {"patients": unique_patients, "count": len(unique_patients)}

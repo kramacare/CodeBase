@@ -11,32 +11,55 @@ interface Visit {
   has_reviewed: boolean;
 }
 
+interface Review {
+  id: number;
+  clinic_id: string;
+  rating: number;
+  review_text: string;
+}
+
 const PatientReviews = () => {
   const navigate = useNavigate();
   const [visits, setVisits] = useState<Visit[]>([]);
+  const [reviews, setReviews] = useState<{[key: string]: Review}>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchVisits = async () => {
+    const fetchData = async () => {
       try {
         const userStr = localStorage.getItem("user");
         if (userStr) {
           const user = JSON.parse(userStr);
+          const patientId = user.patient_id || user.id;
           
-          const response = await fetch(`http://localhost:8000/auth/patient/completed-appointments?patient_id=${user.patient_id || user.id}`);
-          if (response.ok) {
-            const data = await response.json();
-            setVisits(data.visits || []);
+          // Fetch completed appointments
+          const visitsResponse = await fetch(`http://localhost:8000/auth/patient/completed-appointments?patient_id=${patientId}`);
+          let visitsData: Visit[] = [];
+          if (visitsResponse.ok) {
+            const data = await visitsResponse.json();
+            visitsData = data.visits || [];
+            setVisits(visitsData);
+          }
+
+          // Fetch patient's reviews
+          const reviewsResponse = await fetch(`http://localhost:8000/auth/reviews/patient?patient_id=${patientId}`);
+          if (reviewsResponse.ok) {
+            const data = await reviewsResponse.json();
+            const reviewsMap: {[key: string]: Review} = {};
+            data.reviews.forEach((r: Review) => {
+              reviewsMap[r.clinic_id] = r;
+            });
+            setReviews(reviewsMap);
           }
         }
       } catch (error) {
-        console.error("Error fetching visits:", error);
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchVisits();
+    fetchData();
   }, []);
 
   return (
@@ -50,7 +73,7 @@ const PatientReviews = () => {
             <ArrowLeft className="h-5 w-5" />
             <span className="text-sm font-medium">Dashboard</span>
           </Link>
-          <span className="font-semibold text-foreground">Write review</span>
+          <span className="font-semibold text-foreground">My Reviews</span>
         </div>
       </header>
 
@@ -72,37 +95,62 @@ const PatientReviews = () => {
               Book and complete an appointment to see clinics here and write a
               review.
             </p>
-            <Button asChild className="mt-4">
-              <Link to="/patient/find-clinics">Book appointment</Link>
-            </Button>
           </div>
         ) : (
-          <ul className="mt-6 space-y-3">
-            {visits.map((v) => (
-              <li
-                key={v.clinic_id}
-                className="flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-sm"
-              >
-                <div>
-                  <p className="font-semibold text-foreground">{v.clinic_name}</p>
-                  <p className="text-sm text-muted-foreground">{v.date} at {v.time}</p>
-                </div>
-                {!v.has_reviewed ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => navigate(`/patient/reviews/${v.clinic_id}`, { state: { visit: v } })}
-                  >
-                    Write review
-                  </Button>
-                ) : (
-                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
-                    Reviewed
-                  </span>
-                )}
-              </li>
-            ))}
+          <ul className="mt-6 space-y-4">
+            {visits.map((v) => {
+              const review = reviews[v.clinic_id];
+              return (
+                <li
+                  key={v.clinic_id}
+                  className="rounded-xl border border-border bg-card p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-semibold text-foreground">{v.clinic_name}</p>
+                      <p className="text-sm text-muted-foreground">{v.date} at {v.time}</p>
+                    </div>
+                    {!v.has_reviewed ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => navigate(`/patient/reviews/${v.clinic_id}`, { state: { visit: v } })}
+                      >
+                        Write review
+                      </Button>
+                    ) : (
+                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
+                        Reviewed
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Show existing review if available */}
+                  {review && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star
+                            key={star}
+                            className={`h-4 w-4 ${
+                              star <= review.rating
+                                ? "fill-amber-400 text-amber-400"
+                                : "text-gray-300"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      {review.review_text && (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          &ldquo;{review.review_text}&rdquo;
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </main>
