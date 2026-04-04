@@ -3,7 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Phone, Lock, Trash2, User, LogOut, Building2, Mail } from "lucide-react";
+import { ArrowLeft, Phone, Lock, Trash2, User, LogOut, Building2, Mail, QrCode } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 const ClinicProfile = () => {
   const navigate = useNavigate();
@@ -33,6 +40,7 @@ const ClinicProfile = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [showQrDialog, setShowQrDialog] = useState(false);
 
   // Auto-hide message after 5 seconds
   useEffect(() => {
@@ -194,6 +202,11 @@ const ClinicProfile = () => {
     localStorage.removeItem("krama_visit_history");
     localStorage.removeItem("user");
     navigate("/");
+  };
+
+  const getClinicQrUrl = () => {
+    if (!dbProfile?.clinic_id) return "";
+    return `${window.location.origin}/walkin?clinic_id=${dbProfile.clinic_id}`;
   };
 
   if (loading) {
@@ -371,6 +384,29 @@ const ClinicProfile = () => {
           {/* Delete Account */}
           <div className="rounded-2xl bg-white shadow-lg p-6 lg:col-span-2">
             <div className="flex items-center gap-3 mb-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100">
+                <QrCode className="h-6 w-6 text-purple-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">QR Code</h2>
+                <p className="text-sm text-gray-500">Show QR code for patients to join queue</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-3">
+              <Button 
+                onClick={() => setShowQrDialog(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                <QrCode className="h-4 w-4 mr-2" />
+                Show QR Code
+              </Button>
+            </div>
+          </div>
+
+          {/* Delete Account */}
+          <div className="rounded-2xl bg-white shadow-lg p-6 lg:col-span-2">
+            <div className="flex items-center gap-3 mb-6">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
                 <Trash2 className="h-6 w-6 text-red-600" />
               </div>
@@ -400,6 +436,37 @@ const ClinicProfile = () => {
           </div>
         </div>
       </main>
+
+      {/* QR Code Dialog */}
+      <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="text-center space-y-4">
+            <DialogTitle className="text-xl font-extrabold tracking-tight text-[#00555A]">KRAMA</DialogTitle>
+            <DialogDescription className="text-sm">
+              Scan to join the queue
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center p-4">
+            {getClinicQrUrl() && (
+              <div className="relative group">
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getClinicQrUrl())}`}
+                  alt="Clinic QR Code"
+                  className="w-44 h-44 rounded-lg shadow-lg transition-transform duration-300 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-xs font-bold text-[#00555A] tracking-widest bg-white/95 backdrop-blur-sm px-2 py-0.5 rounded shadow-sm border border-[#00555A]/10">
+                    KRAMA
+                  </span>
+                </div>
+              </div>
+            )}
+            <p className="mt-4 text-sm text-gray-500 text-center">
+              {dbProfile?.clinic_name}
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
