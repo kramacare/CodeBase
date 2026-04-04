@@ -20,6 +20,7 @@ import ClinicDetails from "./pages/ClinicDetails";
 import BookAppointment from "./pages/BookAppointment";
 import AppointmentConfirmation from "./pages/AppointmentConfirmation";
 import JoinQueue from "./pages/JoinQueue";
+import WalkinQueue from "./pages/WalkinQueue";
 import LiveQueue from "./pages/LiveQueue";
 import PatientLogin from "./pages/PatientLogin";
 import PatientSignup from "./pages/PatientSignup";
@@ -69,6 +70,7 @@ function App() {
 
             {/* Queue System without Header */}
             <Route path="/join" element={<NoHeaderLayout><JoinQueue /></NoHeaderLayout>} />
+            <Route path="/walkin" element={<NoHeaderLayout><WalkinQueue /></NoHeaderLayout>} />
             <Route path="/live" element={<NoHeaderLayout><LiveQueue /></NoHeaderLayout>} />
 
             {/* Clinic Area without Header */}

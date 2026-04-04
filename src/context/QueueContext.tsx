@@ -3,8 +3,9 @@ import { createContext, useContext, useState, useCallback } from "react";
 type QueueItem = {
   token: string;
   name: string;
+  phone?: string;
   patient_email?: string;
-  source: "online" | "desk" | "skipped";
+  source: "online" | "desk" | "walkin" | "skipped";
   clinic_id: string;
   appointment_id?: number;
 };
@@ -24,6 +25,19 @@ type CurrentServing = {
   startTime: Date | null;
 };
 
+type WalkinPayload = {
+  clinic_id: string;
+  doctor_id: string;
+  patient_name: string;
+  phone: string;
+};
+
+type WalkinResult = {
+  token_number: number;
+  token_label: string;
+  position: number;
+};
+
 type QueueContextType = {
   queue: QueueItem[];
   currentToken: number;
@@ -36,6 +50,9 @@ type QueueContextType = {
   skipPatient: () => Promise<void>;
   fetchQueueStats: (clinicId: string) => void;
   fetchQueueForClinic: (clinicId: string) => void;
+  addWalkinToQueue: (payload: WalkinPayload) => Promise<WalkinResult>;
+  addPatient: (name: string, source: "online" | "desk") => void;
+  resetQueue: () => void;
 };
 
 const QueueContext = createContext<QueueContextType | null>(null);
@@ -45,6 +62,8 @@ export const useQueue = () => {
   if (!ctx) throw new Error("useQueue must be used inside QueueProvider");
   return ctx;
 };
+
+const API_BASE = "http://localhost:8000";
 
 export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -57,36 +76,29 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchQueueForClinic = useCallback(async (clinicId: string) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Fetch appointments for this clinic today
-      const response = await fetch(`http://localhost:8000/auth/appointments/today?clinic_id=${clinicId}`);
+      const response = await fetch(`${API_BASE}/auth/appointments/today?clinic_id=${clinicId}`);
       if (response.ok) {
         const data = await response.json();
         const appointments = data.appointments || [];
-        
-        // Convert appointments to queue items
+
         const queueItems: QueueItem[] = appointments.map((apt: any, index: number) => ({
           token: apt.token || `T-${index + 1}`,
           name: apt.patient_name,
           patient_email: apt.patient_email,
-          source: "online" as const,
+          source: apt.source === "walkin" ? "walkin" : "online",
           clinic_id: apt.clinic_id,
-          appointment_id: apt.id
+          appointment_id: apt.id,
         }));
-        
+
         setQueue(queueItems);
         setTotalToday(appointments.length);
-        
-        // Set current token to last served + 1
+
         if (appointments.length > 0) {
-          const lastToken = appointments.length;
-          setCurrentToken(lastToken);
+          setCurrentToken(appointments.length);
         }
       }
-      
-      // Also fetch history stats for accurate completed/skipped counts
-      const statsResponse = await fetch(`http://localhost:8000/auth/queue/history/stats?clinic_id=${clinicId}`);
+
+      const statsResponse = await fetch(`${API_BASE}/auth/queue/history/stats?clinic_id=${clinicId}`);
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         setCompletedCount(statsData.total_patients_served || 0);
@@ -99,7 +111,7 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchQueueStats = useCallback(async (clinicId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/queue/stats/${clinicId}`);
+      const response = await fetch(`${API_BASE}/queue/stats/${clinicId}`);
       if (response.ok) {
         const data = await response.json();
         setQueueStats(data);
@@ -110,143 +122,170 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, []);
 
+  // ─── NEW: Walk-in patient joins via QR code ────────────────────────────────
+  // Posts to the shared /queue/join endpoint with source:"walkin",
+  // then appends the patient to the bottom of the live in-memory queue so the
+  // clinic control screen updates instantly without a full refresh.
+  const addWalkinToQueue = useCallback(
+    async (payload: WalkinPayload): Promise<WalkinResult> => {
+      const res = await fetch(`${API_BASE}/queue/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clinic_id: payload.clinic_id,
+          doctor_id: payload.doctor_id,
+          patient_name: payload.patient_name,
+          phone: payload.phone,
+          source: "walkin",
+          booking_id: null,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to join queue");
+      }
+
+      const data = await res.json();
+
+      // Merge into the live queue immediately — walk-ins always go to the end
+      const newItem: QueueItem = {
+        token: data.token_label || `W-${data.token_number}`,
+        name: payload.patient_name,
+        phone: payload.phone,
+        source: "walkin",
+        clinic_id: payload.clinic_id,
+      };
+
+      setQueue((prev) => [...prev, newItem]);
+      setTotalToday((prev) => prev + 1);
+
+      return {
+        token_number: data.token_number,
+        token_label: data.token_label || `W-${data.token_number}`,
+        position: data.position,
+      };
+    },
+    []
+  );
+  // ──────────────────────────────────────────────────────────────────────────
+
   const nextPatient = useCallback(async () => {
     if (queue.length > 0) {
       const patient = queue[0];
       const position = queue.length;
       const appointmentId = patient.appointment_id;
-      
-      // Step 1: If there's a current patient being served, end their session first
+
       if (currentServing && currentServing.historyId) {
         try {
-          console.log("Ending session for previous patient:", currentServing.patientName);
-          const endResponse = await fetch(`http://localhost:8000/auth/queue/history/${currentServing.historyId}/end`, {
-            method: "PUT"
+          await fetch(`${API_BASE}/auth/queue/history/${currentServing.historyId}/end`, {
+            method: "PUT",
           });
-          if (endResponse.ok) {
-            const endData = await endResponse.json();
-            console.log("Previous session ended:", endData);
-          }
         } catch (error) {
           console.error("Failed to end previous patient session:", error);
         }
       }
-      
-      // Step 2: Start new patient session (record start_time)
+
       try {
         const patientEmail = patient.patient_email || "";
         const startResponse = await fetch(
-          `http://localhost:8000/auth/queue/history/start?clinic_id=${patient.clinic_id}&patient_name=${encodeURIComponent(patient.name)}&patient_email=${encodeURIComponent(patientEmail)}&token=${patient.token}&position=${position}`,
+          `${API_BASE}/auth/queue/history/start?clinic_id=${patient.clinic_id}&patient_name=${encodeURIComponent(patient.name)}&patient_email=${encodeURIComponent(patientEmail)}&token=${patient.token}&position=${position}`,
           { method: "POST" }
         );
-        
+
         if (startResponse.ok) {
           const historyData = await startResponse.json();
-          console.log("New session started:", historyData);
-          
-          // Update current serving state
           setCurrentServing({
             historyId: historyData.history_id,
             patientName: patient.name,
             token: patient.token,
             position: position,
-            startTime: new Date()
+            startTime: new Date(),
           });
         }
       } catch (error) {
         console.error("Failed to start patient session:", error);
       }
-      
-      // Step 3: Delete the appointment from appointments table
+
       if (appointmentId) {
         try {
-          await fetch(`http://localhost:8000/auth/appointments/${appointmentId}`, {
-            method: "DELETE"
+          await fetch(`${API_BASE}/auth/appointments/${appointmentId}`, {
+            method: "DELETE",
           });
-          console.log("Appointment deleted from table");
         } catch (error) {
           console.error("Failed to delete appointment:", error);
         }
       }
-      
-      // Step 4: Remove patient from queue and update counters
+
       const newQueue = queue.slice(1);
       setQueue(newQueue);
-      setCurrentToken(prev => prev + 1);
-      setCompletedCount(prev => prev + 1);
-      setTotalToday(prev => prev - 1);
-      
-      // If queue is now empty, keep currentServing (will end on next Next click)
-      // DO NOT clear currentServing here - wait for user to click Next again
+      setCurrentToken((prev) => prev + 1);
+      setCompletedCount((prev) => prev + 1);
+      setTotalToday((prev) => prev - 1);
     } else if (currentServing && currentServing.historyId) {
-      // Queue is empty - this is the 4th click to end the last patient's session
       try {
-        console.log("Queue empty, ending session for:", currentServing.patientName);
-        const endResponse = await fetch(`http://localhost:8000/auth/queue/history/${currentServing.historyId}/end`, {
-          method: "PUT"
+        await fetch(`${API_BASE}/auth/queue/history/${currentServing.historyId}/end`, {
+          method: "PUT",
         });
-        if (endResponse.ok) {
-          const endData = await endResponse.json();
-          console.log("Final session ended:", endData);
-        }
       } catch (error) {
         console.error("Failed to end patient session:", error);
       }
       setCurrentServing(null);
-      setCurrentToken(prev => prev + 1);
+      setCurrentToken((prev) => prev + 1);
     }
   }, [queue, currentServing]);
 
   const skipPatient = useCallback(async () => {
     if (queue.length > 0) {
       const patient = queue[0];
-      
-      // If there's a current patient being served, end their session first
+
       if (currentServing && currentServing.historyId) {
         try {
-          await fetch(`http://localhost:8000/auth/queue/history/${currentServing.historyId}/end`, {
-            method: "PUT"
+          await fetch(`${API_BASE}/auth/queue/history/${currentServing.historyId}/end`, {
+            method: "PUT",
           });
         } catch (error) {
           console.error("Failed to end previous patient session:", error);
         }
       }
-      
-      // Record skipped patient
+
       try {
         await fetch(
-          `http://localhost:8000/auth/queue/history/start?clinic_id=${patient.clinic_id}&patient_name=${encodeURIComponent(patient.name)}&patient_email=&token=${patient.token}&position=${queue.length}`,
+          `${API_BASE}/auth/queue/history/start?clinic_id=${patient.clinic_id}&patient_name=${encodeURIComponent(patient.name)}&patient_email=&token=${patient.token}&position=${queue.length}`,
           { method: "POST" }
         );
       } catch (error) {
         console.error("Failed to record skipped patient:", error);
       }
-      
-      // Move skipped patient to position 3 (after 2 patients)
-      // Queue: [A, B, C, D, E] -> Skip A -> [B, C, A, D, E]
+
       const skippedPatient = { ...patient, source: "skipped" as const };
       const remainingQueue = queue.slice(1);
-      
-      // Insert skipped patient at index 2 (position 3)
-      const newQueue = [...remainingQueue.slice(0, 2), skippedPatient, ...remainingQueue.slice(2)];
+      const newQueue = [
+        ...remainingQueue.slice(0, 2),
+        skippedPatient,
+        ...remainingQueue.slice(2),
+      ];
       setQueue(newQueue);
-      setCurrentToken(prev => prev + 1);
-      setSkippedCount(prev => prev + 1);
+      setCurrentToken((prev) => prev + 1);
+      setSkippedCount((prev) => prev + 1);
       setCurrentServing(null);
     }
   }, [queue, currentServing]);
 
-  const addPatient = useCallback((name: string, source: "online" | "desk") => {
-    const newToken = `T-${totalToday + 1}`;
-    const newPatient: QueueItem = {
-      token: newToken,
-      name,
-      source,
-      clinic_id: ""
-    };
-    setQueue(prev => [...prev, newPatient]);
-    setTotalToday(prev => prev + 1);
-  }, [totalToday]);
+  const addPatient = useCallback(
+    (name: string, source: "online" | "desk") => {
+      const newToken = `T-${totalToday + 1}`;
+      const newPatient: QueueItem = {
+        token: newToken,
+        name,
+        source,
+        clinic_id: "",
+      };
+      setQueue((prev) => [...prev, newPatient]);
+      setTotalToday((prev) => prev + 1);
+    },
+    [totalToday]
+  );
 
   const resetQueue = useCallback(() => {
     setQueue([]);
@@ -269,10 +308,11 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
         currentServing,
         nextPatient,
         skipPatient,
+        addWalkinToQueue,
+        fetchQueueStats,
+        fetchQueueForClinic,
         addPatient,
         resetQueue,
-        fetchQueueStats,
-        fetchQueueForClinic
       }}
     >
       {children}

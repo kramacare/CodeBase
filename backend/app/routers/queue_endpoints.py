@@ -242,3 +242,79 @@ async def get_completed_appointments(
         })
     
     return {"completed": completed_list, "total": len(completed_list)}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# QR Walk-in: POST /queue/join
+# Called by JoinQueue.tsx when a patient scans the clinic QR code.
+# Inserts them into the appointments table at the end of today's queue
+# and returns their token number + position.
+# ─────────────────────────────────────────────────────────────────────────────
+
+from pydantic import BaseModel
+from typing import Optional
+
+class QueueJoinRequest(BaseModel):
+    clinic_id: str
+    doctor_id: str          # doctor name or id — stored in doctor_name column
+    patient_name: str
+    phone: str
+    source: str = "walkin"  # always "walkin" from the QR page
+    booking_id: Optional[str] = None  # unused for walk-ins, kept for compatibility
+
+@router.post("/queue/join")
+async def join_queue(
+    payload: QueueJoinRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Walk-in patients join the live queue via QR code scan.
+    - Finds today's last token number for this clinic
+    - Assigns next sequential token (e.g. if last is A-7, new one is A-8)
+    - Inserts a new row in appointments with source='walkin'
+    - Returns token_label, token_number, and position in queue
+    """
+    import uuid
+    from datetime import date
+
+    today = date.today().isoformat()  # e.g. "2024-01-15"
+
+    # Count all of today's appointments for this clinic to get next token number
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.clinic_id == payload.clinic_id,
+            Appointment.date == today
+        ).order_by(Appointment.id)
+    )
+    todays_appointments = result.scalars().all()
+    next_token_number = len(todays_appointments) + 1
+    token_label = f"A-{next_token_number}"
+
+    # Create the walk-in appointment row
+    walkin = Appointment(
+        appointment_token=token_label,
+        clinic_id=payload.clinic_id,
+        patient_id=f"walkin-{uuid.uuid4().hex[:8]}",  # temporary ID for walk-ins
+        patient_name=payload.patient_name,
+        patient_email="",                              # walk-ins have no email
+        patient_phone=payload.phone,
+        doctor_name=payload.doctor_id,                 # store doctor id/name here
+        date=today,
+        time="walk-in",
+        status="booked",
+        source="walkin",
+    )
+    db.add(walkin)
+    await db.commit()
+    await db.refresh(walkin)
+
+    # Position = how many are currently waiting (including this patient)
+    position = len(todays_appointments) + 1
+
+    return {
+        "token_number": next_token_number,
+        "token_label": token_label,
+        "position": position,
+        "patient_name": payload.patient_name,
+        "clinic_id": payload.clinic_id,
+        "source": "walkin",
+    }
