@@ -57,6 +57,7 @@ class Appointment(Base):
     time = Column(String, nullable=False)
     status = Column(String, default="booked")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    source = Column(String, default="online")
 
 class CompletedAppointment(Base):
     """Model for storing completed/served patient history"""

@@ -1401,3 +1401,88 @@ async def get_user_reactions(
     reaction_map = {str(r.review_id): r.reaction_type for r in reactions}
     
     return {"reactions": reaction_map}
+
+# ============= TOKEN/JOIN QUEUE ENDPOINTS =============
+
+@router.post("/tokens/create")
+async def create_token(
+    request: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Create a new token and append to the end of the queue.
+    New patients join at the position after the last current patient.
+    Token format: T-0, T-1, T-2, etc. (appends to end of queue).
+    """
+    from datetime import datetime
+    
+    clinic_id = request.get("clinicId")
+    doctor_id = request.get("doctorId")
+    category_id = request.get("categoryId")
+    patient_name = request.get("patientName")
+    source = request.get("source", "ONLINE")  # QR, ONLINE, etc.
+    
+    # Validate required fields
+    if not all([clinic_id, patient_name]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="clinicId and patientName are required"
+        )
+    
+    # Get current date
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    # Get all active appointments for this clinic today (booked, serving status)
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.clinic_id == clinic_id,
+            Appointment.date == today,
+            Appointment.status.in_(["booked", "serving"])
+        ).order_by(Appointment.id)
+    )
+    existing_appointments = result.scalars().all()
+    
+    # Calculate next token number (append to end of queue)
+    next_token_number = len(existing_appointments)
+    token_label = f"T-{next_token_number}"
+    
+    # Get clinic info for doctor name
+    doctor_name = ""
+    if doctor_id:
+        # Map doctor_id to name (simplified - you can expand this)
+        doctor_names = {
+            "1": "Dr. John Smith",
+            "2": "Dr. Sarah Johnson", 
+            "3": "Dr. Michael Brown"
+        }
+        doctor_name = doctor_names.get(str(doctor_id), "")
+    
+    # Create new appointment at the end of queue
+    new_appointment = Appointment(
+        appointment_token=token_label,
+        clinic_id=clinic_id,
+        patient_id=f"PENDING-{int(datetime.now().timestamp())}",  # Temporary ID for non-logged-in patients
+        patient_name=patient_name,
+        patient_email=request.get("patientEmail", ""),
+        patient_phone=request.get("patientPhone", ""),
+        doctor_name=doctor_name,
+        date=today,
+        time=datetime.now().strftime("%H:%M"),
+        status="booked"
+    )
+    
+    db.add(new_appointment)
+    await db.commit()
+    await db.refresh(new_appointment)
+    
+    return {
+        "message": "Successfully joined the queue",
+        "tokenLabel": token_label,
+        "tokenNumber": next_token_number,
+        "position": next_token_number + 1,  # 1-based position for display
+        "patientsAhead": next_token_number,
+        "appointmentId": new_appointment.id,
+        "clinicId": clinic_id,
+        "patientName": patient_name,
+        "date": today
+    }
