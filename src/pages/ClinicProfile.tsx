@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Phone, Lock, Trash2, User, LogOut, Building2, Mail, QrCode } from "lucide-react";
+import { ArrowLeft, Phone, Lock, Trash2, User, LogOut, Building2, Mail, QrCode, MapPin, ImagePlus, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Phone, Lock, Trash2, User, LogOut, Building2, Mail, MapPin, ImagePlus, X } from "lucide-react";
 
 const ClinicProfile = () => {
   const navigate = useNavigate();

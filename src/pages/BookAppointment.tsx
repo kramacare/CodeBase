@@ -6,6 +6,7 @@ import { ArrowLeft, CalendarDays, Check, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DoctorCard from "@/components/shared/DoctorCard";
 import TimeSlotSelector from "@/components/shared/TimeSlotSelector";
+import PatientTermsModal from "@/components/auth/PatientTermsModal";
 
 const steps = ["Select Doctor", "Select Date", "Select Time", "Confirm"];
 
@@ -34,6 +35,7 @@ const BookAppointment = () => {
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(preselectedDoc ?? null);
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const dates = useMemo(generateDates, []);
   const slotObj = selectedDoctor?.slots.find((s) => s.id === selectedSlot);
@@ -58,6 +60,23 @@ const BookAppointment = () => {
       token: `T-${Math.floor(100 + Math.random() * 900)}`,
     },
   });
+};
+
+const proceedWithBooking = () => {
+  handleConfirm();
+};
+
+const handleConfirmClick = () => {
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Show modal only if selected date is not today
+  if (selectedDate !== today) {
+    setShowTermsModal(true);
+  } else {
+    // Proceed directly for same-day bookings
+    proceedWithBooking();
+  }
 };
 
 
@@ -184,7 +203,7 @@ const BookAppointment = () => {
             <>
               <Button variant="outline" className="flex-1" onClick={() => navigate(-1)}>Cancel</Button>
 
-              <Button className="flex-1" onClick={handleConfirm}>Confirm Appointment</Button>
+              <Button className="flex-1" onClick={handleConfirmClick}>Confirm Appointment</Button>
 
             </>
           ) : (
@@ -194,6 +213,16 @@ const BookAppointment = () => {
           )}
         </div>
       </main>
+
+      {/* Patient Terms Modal */}
+      <PatientTermsModal
+        open={showTermsModal}
+        onOpenChange={setShowTermsModal}
+        onAccept={() => {
+          setShowTermsModal(false);
+          proceedWithBooking();
+        }}
+      />
     </div>
   );
 };

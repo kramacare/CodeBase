@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { ArrowLeft, MapPin, Phone, Star, Clock, ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import PatientTermsModal from "@/components/auth/PatientTermsModal";
 
 interface Review {
   id: number;
@@ -30,6 +31,7 @@ const ClinicDetails = () => {
   const [userReactions, setUserReactions] = useState<{[key: number]: string}>({});
   const [patientId, setPatientId] = useState<string>("");
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [showPatientTerms, setShowPatientTerms] = useState(false);
 
   useEffect(() => {
     if (message) {
@@ -182,8 +184,8 @@ const ClinicDetails = () => {
     const dateOptions = generateDates();
     setDates(dateOptions);
     
-    // Default to today
-    const defaultDate = dateOptions[0].value;
+    // Default to tomorrow (index 1) instead of today (index 0)
+    const defaultDate = dateOptions[1]?.value || dateOptions[0].value;
     setSelectedDate(defaultDate);
     fetchTimeSlots(defaultDate);
     setShowTimeSelection(true);
@@ -196,6 +198,24 @@ const ClinicDetails = () => {
   };
 
   const handleConfirmBooking = async () => {
+    if (!selectedTime || !selectedDate) {
+      setMessage({text: "Please select a date and time", type: "error"});
+      return;
+    }
+
+    // Check if selected date is today to determine if modal should show
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (selectedDate !== today) {
+      // Show terms modal for future bookings
+      setShowPatientTerms(true);
+    } else {
+      // Proceed directly for same-day bookings
+      proceedWithBooking();
+    }
+  };
+
+  const proceedWithBooking = async () => {
     if (!selectedTime || !selectedDate) {
       setMessage({text: "Please select a date and time", type: "error"});
       return;
@@ -585,6 +605,16 @@ const ClinicDetails = () => {
           </div>
         </div>
       )}
+
+      {/* Patient Terms Modal */}
+      <PatientTermsModal
+        open={showPatientTerms}
+        onOpenChange={setShowPatientTerms}
+        onAccept={() => {
+          setShowPatientTerms(false);
+          proceedWithBooking();
+        }}
+      />
     </div>
   );
 };
