@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.database.db import get_db
-from app.database.models import Clinic, Patient, OTPVerification, Appointment, CompletedAppointment, Time, Review, ReviewReaction, ClinicImage
+from app.database.models import Clinic, Patient, OTPVerification, Appointment, CompletedAppointment, Review, ReviewReaction, ClinicImage, QRAppointment
 from app.schemas import (
     ClinicSignup, ClinicLogin, PatientSignup, PatientLogin,
     ChangePasswordRequest, ChangePhoneRequest, DeleteAccountRequest,
@@ -257,7 +257,8 @@ async def list_clinics(db: AsyncSession = Depends(get_db)):
             "doctors": [{"name": clinic.doctor_name or "Available Doctor"}],
             "rating": 4.5,  # Default rating
             "wait_time": "15-30 min",
-            "distance": "2.5 km"
+            "distance": "2.5 km",
+            "is_active": clinic.is_active or False
         })
     
     return {"clinics": clinic_list}
@@ -595,202 +596,6 @@ async def clinic_delete_account(
     
     return {"message": "Account deleted successfully"}
 
-@router.put("/clinic/update-availability")
-async def clinic_update_availability(
-    request: dict,
-    db: AsyncSession = Depends(get_db)
-):
-    """Update clinic availability status for today"""
-    clinic_id = request.get("clinic_id")
-    available = request.get("available")
-    
-    if clinic_id is None or available is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="clinic_id and available are required"
-        )
-    
-    result = await db.execute(select(Clinic).where(Clinic.clinic_id == clinic_id))
-    clinic = result.scalar_one_or_none()
-    
-    if not clinic:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clinic not found"
-        )
-    
-    # Update availability
-    clinic.available = available
-    await db.commit()
-    
-    return {"message": "Availability updated successfully", "available": available}
-
-@router.put("/clinic/save-time")
-async def clinic_save_time(
-    request: dict,
-    db: AsyncSession = Depends(get_db)
-):
-    """Save clinic operating hours and unavailable time slots"""
-    clinic_id = request.get("clinic_id")
-    email = request.get("email") or ""
-    starting = request.get("starting")
-    ending = request.get("ending")
-    not_available = request.get("not_available")  # Comma-separated hours like "1,11"
-    
-    if not clinic_id or starting is None or ending is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="clinic_id, starting, and ending are required"
-        )
-    
-    # Update clinics table with start and end
-    result = await db.execute(select(Clinic).where(Clinic.clinic_id == clinic_id))
-    clinic = result.scalar_one_or_none()
-    
-    if clinic:
-        clinic.start = starting
-        clinic.end = ending
-    
-    # Check if record exists in times table
-    result = await db.execute(select(Time).where(Time.clinic_id == clinic_id))
-    time_record = result.scalar_one_or_none()
-    
-    if time_record:
-        # Update existing record
-        time_record.starting = starting
-        time_record.ending = ending
-        time_record.not_available = not_available or ""
-    else:
-        # Create new record
-        new_time = Time(
-            clinic_id=clinic_id,
-            email=email,
-            starting=starting,
-            ending=ending,
-            not_available=not_available or ""
-        )
-        db.add(new_time)
-    
-    await db.commit()
-    
-    return {
-        "message": "Time saved successfully",
-        "starting": starting,
-        "ending": ending,
-        "not_available": not_available
-    }
-
-@router.get("/clinic/get-time")
-async def clinic_get_time(
-    clinic_id: str = Query(...),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get clinic operating hours and unavailable time slots"""
-    result = await db.execute(select(Time).where(Time.clinic_id == clinic_id))
-    time_record = result.scalar_one_or_none()
-    
-    if not time_record:
-        return {
-            "starting": None,
-            "ending": None,
-            "not_available": ""
-        }
-    
-    return {
-        "starting": time_record.starting,
-        "ending": time_record.ending,
-        "not_available": time_record.not_available or ""
-    }
-
-@router.get("/clinic/time-slots")
-async def clinic_get_time_slots(
-    clinic_id: str = Query(...),
-    date: str = Query(...),  # Format: YYYY-MM-DD
-    db: AsyncSession = Depends(get_db)
-):
-    """Get available time slots for a clinic on a specific date"""
-    # Get clinic data
-    result = await db.execute(select(Clinic).where(Clinic.clinic_id == clinic_id))
-    clinic = result.scalar_one_or_none()
-    
-    if not clinic:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Clinic not found"
-        )
-    
-    # Get time data
-    result = await db.execute(select(Time).where(Time.clinic_id == clinic_id))
-    time_record = result.scalar_one_or_none()
-    
-    start_hour = time_record.starting if time_record and time_record.starting else 9
-    end_hour = time_record.ending if time_record and time_record.ending else 17
-    
-    # Parse not_available hours (stored as comma-separated like "1,11")
-    not_available_hours = []
-    if time_record and time_record.not_available:
-        try:
-            not_available_hours = [int(x.strip()) for x in time_record.not_available.split(",") if x.strip()]
-        except:
-            not_available_hours = []
-    
-    # Get booked appointments for this date
-    result = await db.execute(
-        select(Appointment).where(
-            Appointment.clinic_id == clinic_id,
-            Appointment.date == date,
-            Appointment.status == "booked"
-        )
-    )
-    booked_appointments = result.scalars().all()
-    booked_times = [apt.time for apt in booked_appointments]
-    
-    # Check if this is today (apply not_available only for today)
-    today = datetime.now().strftime("%Y-%m-%d")
-    is_today = date == today
-    
-    # Get current hour for today filtering
-    current_hour = datetime.now().hour
-    
-    # Generate time slots (1-hour intervals)
-    slots = []
-    for hour in range(start_hour, end_hour + 1):
-        slot_time = f"{hour:02d}:00"
-        
-        # For today: check not_available AND booked AND past time
-        # For tomorrow/day after: only check booked (show full availability)
-        if is_today:
-            # Check if slot is in the past (hour < current hour)
-            is_past = hour < current_hour
-            is_available = not is_past and hour not in not_available_hours and slot_time not in booked_times
-        else:
-            is_available = slot_time not in booked_times
-        
-        # Format for display
-        display_time = ""
-        if hour == 12:
-            display_time = "12:00 PM"
-        elif hour > 12:
-            display_time = f"{hour - 12}:00 PM"
-        else:
-            display_time = f"{hour}:00 AM"
-        
-        slots.append({
-            "time": slot_time,
-            "display": display_time,
-            "available": is_available
-        })
-    
-    return {
-        "clinic_id": clinic_id,
-        "date": date,
-        "is_today": is_today,
-        "start_hour": start_hour,
-        "end_hour": end_hour,
-        "slots": slots,
-        "booked_count": len(booked_times)
-    }
-
 # Patient Profile Management Endpoints
 @router.put("/patient/change-password")
 async def patient_change_password(
@@ -1125,16 +930,76 @@ async def create_appointment(
         )
     
     # Get next token number for this clinic AND date (start from T-0 for each date)
+    # Count from BOTH tables (online appointments + QR walk-ins) for unified numbering
     result = await db.execute(
         select(Appointment).where(
             Appointment.clinic_id == clinic_id,
             Appointment.date == date
         )
     )
-    existing_appointments = result.scalars().all()
+    online_count = len(result.scalars().all())
+
+    result = await db.execute(
+        select(QRAppointment).where(
+            QRAppointment.clinic_id == clinic_id,
+            QRAppointment.date == date
+        )
+    )
+    qr_count = len(result.scalars().all())
+
+    # Get highest token number from all three tables (active + completed)
+    max_token = -1
     
-    # Calculate next token number (start from T-0, increment by 1 for each date)
-    next_token_number = len(existing_appointments)
+    # Check online appointments
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.clinic_id == clinic_id,
+            Appointment.date == date
+        )
+    )
+    for apt in result.scalars().all():
+        if apt.appointment_token:
+            try:
+                token_num = int(apt.appointment_token.replace("T-", ""))
+                if token_num > max_token:
+                    max_token = token_num
+            except:
+                pass
+    
+    # Check QR appointments
+    result = await db.execute(
+        select(QRAppointment).where(
+            QRAppointment.clinic_id == clinic_id,
+            QRAppointment.date == date
+        )
+    )
+    for apt in result.scalars().all():
+        if apt.appointment_token:
+            try:
+                token_num = int(apt.appointment_token.replace("T-", ""))
+                if token_num > max_token:
+                    max_token = token_num
+            except:
+                pass
+    
+    # Check completed appointments for today
+    result = await db.execute(
+        select(CompletedAppointment).where(
+            CompletedAppointment.clinic_id == clinic_id,
+            CompletedAppointment.date == date
+        )
+    )
+    for apt in result.scalars().all():
+        if apt.appointment_token:
+            try:
+                token_num = int(apt.appointment_token.replace("T-", ""))
+                if token_num > max_token:
+                    max_token = token_num
+            except:
+                pass
+
+    # Next token is highest + 1
+    next_token_number = max_token + 1
     appointment_token = f"T-{next_token_number}"
     
     # Create appointment
@@ -1294,6 +1159,118 @@ async def get_clinic_appointments(
         })
     
     return {"appointments": appointment_list, "total": len(appointment_list)}
+
+@router.get("/appointments/today")
+async def get_today_appointments(
+    clinic_id: str = Query(..., description="Clinic ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get today's appointments for a specific clinic from both:
+    - appointments table (online bookings)
+    - qr_appointments table (QR walk-in bookings)
+    Returns combined list ordered by creation time.
+    """
+    from datetime import datetime
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Fetch online appointments from appointments table
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.clinic_id == clinic_id,
+            Appointment.date == today
+        ).order_by(Appointment.id)
+    )
+    online_appointments = result.scalars().all()
+
+    # Fetch QR walk-in appointments from qr_appointments table
+    result = await db.execute(
+        select(QRAppointment).where(
+            QRAppointment.clinic_id == clinic_id,
+            QRAppointment.date == today
+        ).order_by(QRAppointment.id)
+    )
+    qr_appointments = result.scalars().all()
+
+    # Combine both lists
+    appointment_list = []
+
+    # Add online appointments
+    for apt in online_appointments:
+        appointment_list.append({
+            "id": apt.id,
+            "token": apt.appointment_token,
+            "clinic_id": apt.clinic_id,
+            "patient_id": apt.patient_id,
+            "patient_name": apt.patient_name,
+            "patient_email": apt.patient_email,
+            "patient_phone": apt.patient_phone,
+            "doctor_name": apt.doctor_name,
+            "date": apt.date,
+            "time": apt.time,
+            "status": apt.status,
+            "created_at": apt.created_at,
+            "source": apt.source or "online"
+        })
+
+    # Add QR walk-in appointments
+    for apt in qr_appointments:
+        appointment_list.append({
+            "id": apt.id,
+            "token": apt.appointment_token,
+            "clinic_id": apt.clinic_id,
+            "patient_id": f"qr-{apt.id}",  # QR appointments don't have patient_id
+            "patient_name": apt.patient_name,
+            "patient_email": "",  # QR appointments don't have email
+            "patient_phone": apt.patient_phone,
+            "doctor_name": apt.doctor_name,
+            "date": apt.date,
+            "time": "walk-in",
+            "status": apt.status,
+            "created_at": apt.created_at,
+            "source": "walkin"
+        })
+
+    # Sort by created_at time
+    appointment_list.sort(key=lambda x: x["created_at"] or datetime.min)
+
+    return {"appointments": appointment_list, "total": len(appointment_list)}
+
+@router.delete("/appointments/{appointment_id}")
+async def delete_appointment(
+    appointment_id: int,
+    source: str = Query("online", description="Source type: online or walkin"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete an appointment by ID.
+    Handles both online appointments (appointments table) and QR walk-ins (qr_appointments table).
+    """
+    if source == "walkin":
+        # Try to find and delete from qr_appointments table
+        result = await db.execute(
+            select(QRAppointment).where(QRAppointment.id == appointment_id)
+        )
+        appointment = result.scalar_one_or_none()
+        if appointment:
+            await db.delete(appointment)
+            await db.commit()
+            return {"message": "QR walk-in appointment deleted successfully"}
+    else:
+        # Try to find and delete from appointments table
+        result = await db.execute(
+            select(Appointment).where(Appointment.id == appointment_id)
+        )
+        appointment = result.scalar_one_or_none()
+        if appointment:
+            await db.delete(appointment)
+            await db.commit()
+            return {"message": "Appointment deleted successfully"}
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Appointment not found"
+    )
 
 @router.get("/appointments/queue-position")
 async def get_queue_position(

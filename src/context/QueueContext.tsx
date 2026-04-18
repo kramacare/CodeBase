@@ -18,11 +18,13 @@ type QueueStats = {
 };
 
 type CurrentServing = {
-  historyId: number | null;
   patientName: string;
   token: string;
   position: number;
   startTime: Date | null;
+  appointmentId?: number;
+  clinicId?: string;
+  source?: "online" | "desk" | "walkin" | "skipped";
 };
 
 type WalkinPayload = {
@@ -47,6 +49,7 @@ type QueueContextType = {
   totalToday: number;
   currentServing: CurrentServing | null;
   nextPatient: () => Promise<void>;
+  completePatient: () => Promise<void>;
   skipPatient: () => Promise<void>;
   fetchQueueStats: (clinicId: string) => void;
   fetchQueueForClinic: (clinicId: string) => void;
@@ -84,6 +87,7 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
         const queueItems: QueueItem[] = appointments.map((apt: any, index: number) => ({
           token: apt.token || `T-${index + 1}`,
           name: apt.patient_name,
+          phone: apt.patient_phone,
           patient_email: apt.patient_email,
           source: apt.source === "walkin" ? "walkin" : "online",
           clinic_id: apt.clinic_id,
@@ -122,10 +126,6 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, []);
 
-  // ─── NEW: Walk-in patient joins via QR code ────────────────────────────────
-  // Posts to the shared /queue/join endpoint with source:"walkin",
-  // then appends the patient to the bottom of the live in-memory queue so the
-  // clinic control screen updates instantly without a full refresh.
   const addWalkinToQueue = useCallback(
     async (payload: WalkinPayload): Promise<WalkinResult> => {
       const res = await fetch(`${API_BASE}/queue/join`, {
@@ -148,7 +148,6 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
 
       const data = await res.json();
 
-      // Merge into the live queue immediately — walk-ins always go to the end
       const newItem: QueueItem = {
         token: data.token_label || `W-${data.token_number}`,
         name: payload.patient_name,
@@ -168,97 +167,62 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
     },
     []
   );
-  // ──────────────────────────────────────────────────────────────────────────
 
   const nextPatient = useCallback(async () => {
+    console.log("nextPatient called, currentServing:", currentServing);
+
+    // Move next patient to serving
     if (queue.length > 0) {
       const patient = queue[0];
       const position = queue.length;
       const appointmentId = patient.appointment_id;
 
-      if (currentServing && currentServing.historyId) {
-        try {
-          await fetch(`${API_BASE}/auth/queue/history/${currentServing.historyId}/end`, {
-            method: "PUT",
-          });
-        } catch (error) {
-          console.error("Failed to end previous patient session:", error);
-        }
-      }
-
-      try {
-        const patientEmail = patient.patient_email || "";
-        const startResponse = await fetch(
-          `${API_BASE}/auth/queue/history/start?clinic_id=${patient.clinic_id}&patient_name=${encodeURIComponent(patient.name)}&patient_email=${encodeURIComponent(patientEmail)}&token=${patient.token}&position=${position}`,
-          { method: "POST" }
-        );
-
-        if (startResponse.ok) {
-          const historyData = await startResponse.json();
-          setCurrentServing({
-            historyId: historyData.history_id,
-            patientName: patient.name,
-            token: patient.token,
-            position: position,
-            startTime: new Date(),
-          });
-        }
-      } catch (error) {
-        console.error("Failed to start patient session:", error);
-      }
-
-      if (appointmentId) {
-        try {
-          await fetch(`${API_BASE}/auth/appointments/${appointmentId}`, {
-            method: "DELETE",
-          });
-        } catch (error) {
-          console.error("Failed to delete appointment:", error);
-        }
-      }
+      setCurrentServing({
+        patientName: patient.name,
+        token: patient.token,
+        position: position,
+        startTime: new Date(),
+        appointmentId: appointmentId,
+        clinicId: patient.clinic_id,
+        source: patient.source,
+      });
 
       const newQueue = queue.slice(1);
       setQueue(newQueue);
-      setCurrentToken((prev) => prev + 1);
-      setCompletedCount((prev) => prev + 1);
       setTotalToday((prev) => prev - 1);
-    } else if (currentServing && currentServing.historyId) {
-      try {
-        await fetch(`${API_BASE}/auth/queue/history/${currentServing.historyId}/end`, {
-          method: "PUT",
-        });
-      } catch (error) {
-        console.error("Failed to end patient session:", error);
-      }
-      setCurrentServing(null);
-      setCurrentToken((prev) => prev + 1);
     }
   }, [queue, currentServing]);
 
+  const completePatient = useCallback(async () => {
+    console.log("completePatient called, currentServing:", currentServing);
+
+    // Complete the current patient
+    if (currentServing && currentServing.appointmentId) {
+      try {
+        const response = await fetch(`${API_BASE}/auth/clinic/finish-patient`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clinic_id: currentServing.clinicId,
+            appointment_id: currentServing.appointmentId,
+            source: currentServing.source || "online"
+          })
+        });
+        
+        if (response.ok) {
+          console.log("Patient completed and moved to history");
+          setCompletedCount(prev => prev + 1);
+        }
+      } catch (error) {
+        console.error("Error completing patient:", error);
+      }
+      setCurrentServing(null);
+    }
+  }, [currentServing]);
+
   const skipPatient = useCallback(async () => {
     if (queue.length > 0) {
-      const patient = queue[0];
-
-      if (currentServing && currentServing.historyId) {
-        try {
-          await fetch(`${API_BASE}/auth/queue/history/${currentServing.historyId}/end`, {
-            method: "PUT",
-          });
-        } catch (error) {
-          console.error("Failed to end previous patient session:", error);
-        }
-      }
-
-      try {
-        await fetch(
-          `${API_BASE}/auth/queue/history/start?clinic_id=${patient.clinic_id}&patient_name=${encodeURIComponent(patient.name)}&patient_email=&token=${patient.token}&position=${queue.length}`,
-          { method: "POST" }
-        );
-      } catch (error) {
-        console.error("Failed to record skipped patient:", error);
-      }
-
-      const skippedPatient = { ...patient, source: "skipped" as const };
+      const skippedPatient = { ...queue[0], source: "skipped" as const };
       const remainingQueue = queue.slice(1);
       const newQueue = [
         ...remainingQueue.slice(0, 2),
@@ -307,6 +271,7 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
         totalToday,
         currentServing,
         nextPatient,
+        completePatient,
         skipPatient,
         addWalkinToQueue,
         fetchQueueStats,

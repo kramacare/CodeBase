@@ -2,7 +2,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { ArrowLeft, MapPin, Phone, Star, Clock, ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import PatientTermsModal from "@/components/auth/PatientTermsModal";
 
 interface Review {
   id: number;
@@ -27,11 +26,9 @@ const ClinicDetails = () => {
   const [booking, setBooking] = useState(false);
   const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
   const [timeSlots, setTimeSlots] = useState<any[]>([]);
-  const [dates, setDates] = useState<any[]>([]);
   const [userReactions, setUserReactions] = useState<{[key: number]: string}>({});
   const [patientId, setPatientId] = useState<string>("");
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
-  const [showPatientTerms, setShowPatientTerms] = useState(false);
 
   useEffect(() => {
     if (message) {
@@ -139,38 +136,38 @@ const ClinicDetails = () => {
     }
   };
 
-  const fetchTimeSlots = async (date: string) => {
+  const fetchTimeSlots = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/auth/clinic/time-slots?clinic_id=${id}&date=${date}`);
+      const response = await fetch(`http://localhost:8000/auth/clinic/time-slots?clinic_id=${id}`);
       if (response.ok) {
         const data = await response.json();
-        setTimeSlots(data.slots || []);
+        const now = new Date();
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
+        const currentTimeMinutes = currentHour * 60 + currentMinute;
+        
+        // Process slots and add disabled status based on current time
+        const processedSlots = (data.slots || []).map((slot: any) => {
+          const startHour = slot.time_range[0];
+          const endHour = slot.time_range[1];
+          const endTimeMinutes = endHour * 60;
+          const cutoffTime = endTimeMinutes - 15; // 15 min before slot ends
+          
+          // Check if slot is expired (current time past cutoff)
+          const isExpired = currentTimeMinutes >= cutoffTime;
+          
+          return {
+            ...slot,
+            is_expired: isExpired,
+            display_status: isExpired ? "Expired" : (slot.is_open ? "Available" : "Closed")
+          };
+        });
+        
+        setTimeSlots(processedSlots);
       }
     } catch (error) {
       console.error("Error fetching time slots:", error);
     }
-  };
-
-  const generateDates = () => {
-    const dates = [];
-    const today = new Date();
-    
-    for (let i = 0; i < 3; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      
-      const dateStr = date.toISOString().split('T')[0];
-      const dayName = i === 0 ? "Today" : i === 1 ? "Tomorrow" : date.toLocaleDateString("en-US", { weekday: "short" });
-      const displayDate = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      
-      dates.push({
-        value: dateStr,
-        label: dayName,
-        display: displayDate
-      });
-    }
-    
-    return dates;
   };
 
   const handleBookClick = () => {
@@ -180,39 +177,29 @@ const ClinicDetails = () => {
       return;
     }
     
-    // Generate dates for next 3 days
-    const dateOptions = generateDates();
-    setDates(dateOptions);
-    
-    // Default to tomorrow (index 1) instead of today (index 0)
-    const defaultDate = dateOptions[1]?.value || dateOptions[0].value;
-    setSelectedDate(defaultDate);
-    fetchTimeSlots(defaultDate);
+    // Fetch time slots (now returns slots grouped by slot_name)
+    fetchTimeSlots();
     setShowTimeSelection(true);
   };
 
-  const handleDateChange = (date: string) => {
-    setSelectedDate(date);
-    setSelectedTime("");
-    fetchTimeSlots(date);
+  const handleSlotSelect = (slot: any) => {
+    if (slot.is_open) {
+      setSelectedTime(`${slot.slot_name} ${slot.time_range[0]}:00 - ${slot.time_range[1]}:00`);
+    }
   };
 
   const handleConfirmBooking = async () => {
-    if (!selectedTime || !selectedDate) {
-      setMessage({text: "Please select a date and time", type: "error"});
+    if (!selectedTime) {
+      setMessage({text: "Please select a time slot", type: "error"});
       return;
     }
 
-    // Check if selected date is today to determine if modal should show
+    // Use today's date by default
     const today = new Date().toISOString().split('T')[0];
+    setSelectedDate(today);
     
-    if (selectedDate !== today) {
-      // Show terms modal for future bookings
-      setShowPatientTerms(true);
-    } else {
-      // Proceed directly for same-day bookings
-      proceedWithBooking();
-    }
+    // Proceed with booking
+    proceedWithBooking();
   };
 
   const proceedWithBooking = async () => {
@@ -487,54 +474,56 @@ const ClinicDetails = () => {
             </div>
           </div>
         ) : (
-          /* Time Selection View */
+          /* Time Selection View - Show slots by slot_name */
           <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-foreground mb-6">Select Appointment Time</h2>
+            <h2 className="text-xl font-bold text-foreground mb-6">Select Time Slot</h2>
             
             <div className="mb-6">
               <h3 className="font-semibold text-foreground">{clinic.clinic_name}</h3>
               <p className="text-sm text-muted-foreground">{clinic.doctor_name || "Available Doctor"}</p>
             </div>
 
-            {/* Date Tabs */}
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-              {dates.map((date) => (
-                <button
-                  key={date.value}
-                  onClick={() => handleDateChange(date.value)}
-                  className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
-                    selectedDate === date.value
-                      ? "bg-[#00555A] text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {date.label}, {date.display}
-                </button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              {timeSlots.length > 0 ? (
-                timeSlots.map((slot) => (
+            {timeSlots.length > 0 ? (
+              <div className="space-y-4">
+                {timeSlots.map((slot, index) => (
                   <button
-                    key={slot.time}
-                    onClick={() => slot.available && setSelectedTime(slot.display)}
-                    disabled={!slot.available}
-                    className={`p-3 rounded-lg border text-sm transition-colors ${
-                      !slot.available
-                        ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
-                        : selectedTime === slot.display
-                          ? "border-[#00555A] bg-[#00555A] text-white"
-                          : "border-border bg-card hover:border-[#00555A]"
+                    key={index}
+                    onClick={() => handleSlotSelect(slot)}
+                    disabled={!slot.is_open || slot.is_expired}
+                    className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+                      slot.is_expired
+                        ? "bg-gray-50 border-gray-200 cursor-not-allowed opacity-50"
+                        : !slot.is_open
+                          ? "bg-gray-100 border-gray-200 cursor-not-allowed opacity-60"
+                          : selectedTime === `${slot.slot_name} ${slot.time_range[0]}:00 - ${slot.time_range[1]}:00`
+                            ? "border-[#00555A] bg-[#00555A]/10"
+                            : "border-border bg-card hover:border-[#00555A]"
                     }`}
                   >
-                    {slot.display}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className={`font-semibold ${slot.is_expired ? 'line-through text-gray-400' : 'text-foreground'}`}>
+                          {slot.slot_name}
+                        </h3>
+                        <p className={`text-sm ${slot.is_expired ? 'text-gray-400 line-through' : 'text-muted-foreground'}`}>
+                          {slot.time_range[0]}:00 - {slot.time_range[1]}:00
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-medium ${
+                          slot.is_expired ? 'text-gray-400' : 
+                          slot.is_open ? 'text-green-600' : 'text-red-500'
+                        }`}>
+                          {slot.display_status}
+                        </span>
+                      </div>
+                    </div>
                   </button>
-                ))
-              ) : (
-                <p className="col-span-3 text-center text-muted-foreground">No time slots available</p>
-              )}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-8">No time slots available</p>
+            )}
 
             <div className="mt-6">
               <Button
@@ -606,15 +595,6 @@ const ClinicDetails = () => {
         </div>
       )}
 
-      {/* Patient Terms Modal */}
-      <PatientTermsModal
-        open={showPatientTerms}
-        onOpenChange={setShowPatientTerms}
-        onAccept={() => {
-          setShowPatientTerms(false);
-          proceedWithBooking();
-        }}
-      />
     </div>
   );
 };

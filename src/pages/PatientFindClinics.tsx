@@ -82,31 +82,70 @@ const PatientFindClinics = () => {
     }
   }, [message]);
 
-  // Fetch clinics from backend
+  // Fetch clinics from backend - only active ones with available slots
   useEffect(() => {
     const fetchClinics = async () => {
+      setLoading(true);
       try {
         const response = await fetch("http://localhost:8000/auth/clinics/list");
         if (response.ok) {
           const data = await response.json();
-          // Transform backend data to match Clinic type
-          const transformedClinics = data.clinics.map((clinic: any) => ({
-            id: clinic.clinic_id,
-            name: clinic.clinic_name,
-            address: clinic.address,
-            phone: clinic.phone,
-            doctors: clinic.doctors || [{ name: clinic.doctor_name || "Available Doctor" }],
-            specializations: clinic.specializations || ["general"],
-            rating: clinic.rating || 4.5,
-            wait_time: clinic.wait_time || "15-30 min",
-            distance: clinic.distance || "2.5 km"
-          }));
-          setClinics(transformedClinics);
+          const now = new Date();
+          const currentHour = now.getHours();
+          const currentMinute = now.getMinutes();
+          const currentTimeMinutes = currentHour * 60 + currentMinute;
+          
+          // Filter and transform clinics
+          const filteredClinics = [];
+          
+          for (const clinic of data.clinics) {
+            // Only show clinics that are active
+            if (!clinic.is_active) continue;
+            
+            // Fetch time slots for this clinic
+            try {
+              const slotsResponse = await fetch(`http://localhost:8000/auth/clinic/time-slots?clinic_id=${clinic.clinic_id}`);
+              if (slotsResponse.ok) {
+                const slotsData = await slotsResponse.json();
+                const slots = slotsData.slots || [];
+                
+                // Check if clinic has any available slots
+                const availableSlots = slots.filter((slot: any) => {
+                  if (!slot.is_open) return false;
+                  const endHour = slot.time_range[1];
+                  const endTimeMinutes = endHour * 60;
+                  const cutoffTime = endTimeMinutes - 15;
+                  return currentTimeMinutes < cutoffTime;
+                });
+                
+                if (availableSlots.length > 0) {
+                  filteredClinics.push({
+                    id: clinic.clinic_id,
+                    name: clinic.clinic_name,
+                    address: clinic.address,
+                    phone: clinic.phone,
+                    doctors: clinic.doctors || [{ name: clinic.doctor_name || "Available Doctor" }],
+                    specializations: clinic.specializations || ["general"],
+                    rating: clinic.rating || 4.5,
+                    wait_time: clinic.wait_time || "15-30 min",
+                    distance: clinic.distance || "2.5 km",
+                    availableSlots: availableSlots
+                  });
+                }
+              }
+            } catch (e) {
+              console.error("Error fetching slots for clinic:", clinic.clinic_id, e);
+            }
+          }
+          
+          setClinics(filteredClinics);
         } else {
           setMessage({text: "Failed to fetch clinics", type: "error"});
         }
       } catch (error) {
         setMessage({text: "Error fetching clinics", type: "error"});
+      } finally {
+        setLoading(false);
       }
     };
 
