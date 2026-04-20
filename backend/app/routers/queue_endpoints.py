@@ -7,6 +7,12 @@ from app.database.models import Appointment, CompletedAppointment, QRAppointment
 
 router = APIRouter(prefix="/auth", tags=["queue"])
 
+def _token_number(token: str | None) -> int:
+    if not token:
+        return 0
+    digits = "".join(ch for ch in token if ch.isdigit())
+    return int(digits) if digits else 0
+
 @router.post("/clinic/set-active")
 async def set_clinic_active(
     request: dict,
@@ -72,6 +78,7 @@ async def serve_patient(
     """
     clinic_id = request.get("clinic_id")
     appointment_id = request.get("appointment_id")
+    source = request.get("source", "online")
     
     if not all([clinic_id, appointment_id]):
         raise HTTPException(
@@ -79,14 +86,22 @@ async def serve_patient(
             detail="Missing clinic_id or appointment_id"
         )
     
-    # Get the appointment
-    result = await db.execute(
-        select(Appointment).where(
-            Appointment.id == appointment_id,
-            Appointment.clinic_id == clinic_id
+    if source == "walkin":
+        result = await db.execute(
+            select(QRAppointment).where(
+                QRAppointment.id == appointment_id,
+                QRAppointment.clinic_id == clinic_id
+            )
         )
-    )
-    appointment = result.scalar_one_or_none()
+        appointment = result.scalar_one_or_none()
+    else:
+        result = await db.execute(
+            select(Appointment).where(
+                Appointment.id == appointment_id,
+                Appointment.clinic_id == clinic_id
+            )
+        )
+        appointment = result.scalar_one_or_none()
     
     if not appointment:
         raise HTTPException(
@@ -104,7 +119,7 @@ async def serve_patient(
             "id": appointment.id,
             "token": appointment.appointment_token,
             "patient_name": appointment.patient_name,
-            "patient_email": appointment.patient_email,
+            "patient_email": getattr(appointment, "patient_email", ""),
             "patient_phone": appointment.patient_phone,
             "status": "serving"
         }
@@ -217,6 +232,7 @@ async def skip_patient(
     """
     clinic_id = request.get("clinic_id")
     appointment_id = request.get("appointment_id")
+    source = request.get("source", "online")
     
     if not all([clinic_id, appointment_id]):
         raise HTTPException(
@@ -224,11 +240,12 @@ async def skip_patient(
             detail="Missing clinic_id or appointment_id"
         )
     
-    # Get the appointment to skip
+    model = QRAppointment if source == "walkin" else Appointment
+
     result = await db.execute(
-        select(Appointment).where(
-            Appointment.id == appointment_id,
-            Appointment.clinic_id == clinic_id
+        select(model).where(
+            model.id == appointment_id,
+            model.clinic_id == clinic_id
         )
     )
     skipped_appointment = result.scalar_one_or_none()
@@ -239,11 +256,10 @@ async def skip_patient(
             detail="Appointment not found"
         )
     
-    # Get all appointments for this clinic ordered by id
     result = await db.execute(
-        select(Appointment).where(
-            Appointment.clinic_id == clinic_id
-        ).order_by(Appointment.id)
+        select(model).where(
+            model.clinic_id == clinic_id
+        ).order_by(model.id)
     )
     all_appointments = result.scalars().all()
     
@@ -255,18 +271,29 @@ async def skip_patient(
         await db.commit()
         
         # Re-create it at the end (new id will be highest)
-        new_appointment = Appointment(
-            appointment_token=skipped_appointment.appointment_token,
-            clinic_id=skipped_appointment.clinic_id,
-            patient_id=skipped_appointment.patient_id,
-            patient_name=skipped_appointment.patient_name,
-            patient_email=skipped_appointment.patient_email,
-            patient_phone=skipped_appointment.patient_phone,
-            doctor_name=skipped_appointment.doctor_name,
-            date=skipped_appointment.date,
-            time=skipped_appointment.time,
-            status="skipped"  # Mark as skipped
-        )
+        if source == "walkin":
+            new_appointment = QRAppointment(
+                appointment_token=skipped_appointment.appointment_token,
+                clinic_id=skipped_appointment.clinic_id,
+                patient_name=skipped_appointment.patient_name,
+                patient_phone=skipped_appointment.patient_phone,
+                doctor_name=skipped_appointment.doctor_name,
+                date=skipped_appointment.date,
+                status="skipped"
+            )
+        else:
+            new_appointment = Appointment(
+                appointment_token=skipped_appointment.appointment_token,
+                clinic_id=skipped_appointment.clinic_id,
+                patient_id=skipped_appointment.patient_id,
+                patient_name=skipped_appointment.patient_name,
+                patient_email=skipped_appointment.patient_email,
+                patient_phone=skipped_appointment.patient_phone,
+                doctor_name=skipped_appointment.doctor_name,
+                date=skipped_appointment.date,
+                time=skipped_appointment.time,
+                status="skipped"
+            )
         db.add(new_appointment)
         await db.commit()
         await db.refresh(new_appointment)
@@ -334,7 +361,7 @@ async def get_queue_history_stats(
         select(CompletedAppointment).where(
             CompletedAppointment.clinic_id == clinic_id,
             CompletedAppointment.date == today,
-            CompletedAppointment.status == "served"
+            CompletedAppointment.status.in_(["served", "completed"])
         )
     )
     served = result.scalars().all()
@@ -369,7 +396,11 @@ async def get_patient_dashboard(
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
     
-    # Search in appointments table
+    clinic_lookup = {}
+    clinic_result = await db.execute(select(Clinic))
+    for clinic in clinic_result.scalars().all():
+        clinic_lookup[clinic.clinic_id] = clinic
+
     if clinic_id == "ALL":
         result = await db.execute(
             select(Appointment).where(
@@ -391,37 +422,52 @@ async def get_patient_dashboard(
     if not appointments:
         return {"your_token": None, "status": "not_found", "patients_ahead": 0}
     
-    # Get the first appointment
+    appointments = list(appointments)
+    appointments.sort(key=lambda item: item.id)
     apt = appointments[0]
+    clinic = clinic_lookup.get(apt.clinic_id)
     
-    # Count patients ahead in queue
-    if clinic_id == "ALL":
-        count_result = await db.execute(
-            select(Appointment).where(
-                Appointment.date == today,
-                Appointment.id < apt.id
-            )
+    active_clinic_id = apt.clinic_id
+
+    appointment_result = await db.execute(
+        select(Appointment).where(
+            Appointment.clinic_id == active_clinic_id,
+            Appointment.date == today
         )
-    else:
-        count_result = await db.execute(
-            select(Appointment).where(
-                Appointment.clinic_id == clinic_id,
-                Appointment.date == today,
-                Appointment.id < apt.id
-            )
+    )
+    qr_result = await db.execute(
+        select(QRAppointment).where(
+            QRAppointment.clinic_id == active_clinic_id,
+            QRAppointment.date == today
         )
-    
-    patients_ahead = len(count_result.scalars().all())
+    )
+
+    combined_queue = []
+    for item in appointment_result.scalars().all():
+        combined_queue.append({"token": item.appointment_token, "created_at": item.created_at})
+    for item in qr_result.scalars().all():
+        combined_queue.append({"token": item.appointment_token, "created_at": item.created_at})
+
+    combined_queue.sort(key=lambda item: (_token_number(item["token"]), item["created_at"] or datetime.min))
+    patients_ahead = sum(
+        1 for item in combined_queue if _token_number(item["token"]) < _token_number(apt.appointment_token)
+    )
     
     return {
         "your_token": {
+            "appointment_id": apt.id,
+            "token": apt.appointment_token,
             "token_number": int(apt.appointment_token.replace("T-", "")) if apt.appointment_token else 0,
             "patient_name": apt.patient_name,
             "clinic_id": apt.clinic_id,
+            "clinic_name": clinic.clinic_name if clinic else apt.clinic_id,
+            "address": clinic.address if clinic else "",
+            "doctor_name": apt.doctor_name or (clinic.doctor_name if clinic else ""),
             "date": apt.date,
-            "time": apt.time
+            "time": apt.time,
+            "status": apt.status
         },
-        "status": "waiting",
+        "status": apt.status or "waiting",
         "patients_ahead": patients_ahead
     }
 
@@ -634,6 +680,11 @@ async def add_time_slot(
         if isinstance(current_slots, str):
             current_slots = json.loads(current_slots)
         current_slots = list(current_slots or [])
+        if len(current_slots) >= 3:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum 3 time slots allowed"
+            )
         current_slots.append(new_slot)
         record.slots = current_slots
     

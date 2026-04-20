@@ -9,13 +9,10 @@ import { ArrowLeft, Phone, Lock, Trash2, User, LogOut } from "lucide-react";
 const PatientProfile = () => {
   const navigate = useNavigate();
   const { profile } = usePatient();
-  const [dbProfile, setDbProfile] = useState(null);
+  const [dbProfile, setDbProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
-  // Message state
-  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  // Get the actual logged-in user's email from localStorage
   const getLoggedInEmail = () => {
     try {
       const userStr = localStorage.getItem("user");
@@ -28,18 +25,15 @@ const PatientProfile = () => {
     }
     return null;
   };
-  
+
   const loggedInEmail = getLoggedInEmail();
-  
-  // Form states
+
   const [phone, setPhone] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  // Auto-hide message after 5 seconds
   useEffect(() => {
     if (message) {
       const timer = setTimeout(() => setMessage(null), 5000);
@@ -47,7 +41,6 @@ const PatientProfile = () => {
     }
   }, [message]);
 
-  // Fetch patient data from database using actual logged-in email
   useEffect(() => {
     const fetchPatientData = async () => {
       if (!loggedInEmail) {
@@ -72,7 +65,7 @@ const PatientProfile = () => {
       }
     };
 
-    fetchPatientData();
+    void fetchPatientData();
   }, [loggedInEmail]);
 
   const handleLogout = () => {
@@ -85,7 +78,7 @@ const PatientProfile = () => {
 
   const handleChangePhone = async () => {
     if (!loggedInEmail) {
-      setMessage({text: "No logged-in user found", type: "error"});
+      setMessage({ text: "No logged-in user found", type: "error" });
       return;
     }
 
@@ -95,43 +88,35 @@ const PatientProfile = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           new_phone: phone,
-          patient_email: loggedInEmail
-        })
+          patient_email: loggedInEmail,
+        }),
       });
 
       if (response.ok) {
-        setMessage({text: "Phone number updated successfully!", type: "success"});
-        // Refresh data to show updated phone
-        const fetchUpdatedData = async () => {
-          try {
-            const dataResponse = await fetch(`http://localhost:8000/auth/patient/data?email=${loggedInEmail}`);
-            if (dataResponse.ok) {
-              const data = await dataResponse.json();
-              setDbProfile(data);
-              setPhone(data.phone || "");
-            }
-          } catch (error) {
-            console.error("Failed to refresh data:", error);
-          }
-        };
-        fetchUpdatedData();
+        setMessage({ text: "Phone number updated successfully!", type: "success" });
+        const dataResponse = await fetch(`http://localhost:8000/auth/patient/data?email=${loggedInEmail}`);
+        if (dataResponse.ok) {
+          const data = await dataResponse.json();
+          setDbProfile(data);
+          setPhone(data.phone || "");
+        }
       } else {
         const error = await response.json();
-        setMessage({text: error.detail || "Failed to update phone number", type: "error"});
+        setMessage({ text: error.detail || "Failed to update phone number", type: "error" });
       }
     } catch (error) {
-      setMessage({text: "Network error. Please try again.", type: "error"});
+      setMessage({ text: "Network error. Please try again.", type: "error" });
     }
   };
 
   const handleChangePassword = async () => {
     if (!loggedInEmail) {
-      setMessage({text: "No logged-in user found", type: "error"});
+      setMessage({ text: "No logged-in user found", type: "error" });
       return;
     }
 
     if (!currentPassword || !newPassword || newPassword !== confirmPassword) {
-      setMessage({text: "Please fill all password fields correctly", type: "error"});
+      setMessage({ text: "Please fill all password fields correctly", type: "error" });
       return;
     }
 
@@ -142,33 +127,32 @@ const PatientProfile = () => {
         body: JSON.stringify({
           current_password: currentPassword,
           new_password: newPassword,
-          patient_email: loggedInEmail
-        })
+          patient_email: loggedInEmail,
+        }),
       });
 
       if (response.ok) {
-        setMessage({text: "Password changed successfully!", type: "success"});
-        // Clear password fields
+        setMessage({ text: "Password changed successfully!", type: "success" });
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
       } else {
         const error = await response.json();
-        setMessage({text: error.detail || "Failed to change password", type: "error"});
+        setMessage({ text: error.detail || "Failed to change password", type: "error" });
       }
     } catch (error) {
-      setMessage({text: "Network error. Please try again.", type: "error"});
+      setMessage({ text: "Network error. Please try again.", type: "error" });
     }
   };
 
   const handleDeleteAccount = async () => {
     if (!loggedInEmail) {
-      setMessage({text: "No logged-in user found", type: "error"});
+      setMessage({ text: "No logged-in user found", type: "error" });
       return;
     }
 
     if (!deletePassword) {
-      setMessage({text: "Please enter your password to delete account", type: "error"});
+      setMessage({ text: "Please enter your password to delete account", type: "error" });
       return;
     }
 
@@ -183,238 +167,179 @@ const PatientProfile = () => {
         body: JSON.stringify({
           password: deletePassword,
           confirmation: "DELETE",
-          patient_email: loggedInEmail
-        })
+          patient_email: loggedInEmail,
+        }),
       });
 
       if (response.ok) {
-        setMessage({text: "Account deleted successfully!", type: "success"});
-        // Clear all localStorage data
+        setMessage({ text: "Account deleted successfully!", type: "success" });
         localStorage.clear();
-        // Redirect to landing page
         navigate("/");
       } else {
         const error = await response.json();
-        setMessage({text: error.detail || "Failed to delete account", type: "error"});
+        setMessage({ text: error.detail || "Failed to delete account", type: "error" });
       }
     } catch (error) {
       console.error("Error deleting account:", error);
-      setMessage({text: "Network error. Please try again.", type: "error"});
+      setMessage({ text: "Network error. Please try again.", type: "error" });
     }
   };
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-4xl items-center gap-3 px-4">
-          <Link
-            to="/patient"
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            <span className="text-sm font-medium">Dashboard</span>
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-50 border-b border-border/70 bg-background/90 backdrop-blur-xl">
+        <div className="section-container flex h-16 items-center gap-3 px-4 md:px-8">
+          <Link to="/patient" className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" />
+            Dashboard
           </Link>
-          <span className="font-semibold text-gray-900">Profile Settings</span>
+          <span className="text-sm font-semibold text-foreground">Patient Profile</span>
         </div>
       </header>
 
-      {/* Message Toast */}
       {message && (
-        <div className={`fixed top-20 right-4 z-50 px-6 py-3 rounded-lg shadow-lg animate-fade-in ${
-          message.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
-        }`}>
+        <div
+          className={`fixed right-4 top-20 z-50 rounded-full px-4 py-2 text-sm shadow-lg ${
+            message.type === "success" ? "bg-primary text-white" : "bg-red-600 text-white"
+          }`}
+        >
           {message.text}
         </div>
       )}
 
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        {/* Profile Info Card */}
-        <div className="mb-8 rounded-2xl bg-white shadow-lg overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/20 backdrop-blur border-4 border-white/30">
-                <User className="h-10 w-10 text-white" />
-              </div>
-              <div className="text-white">
-                <h1 className="text-2xl font-bold">
-                  {dbProfile ? dbProfile.name : (loading ? 'Loading...' : profile.name)}
-                </h1>
-                <p className="text-blue-100">
-                  {dbProfile ? dbProfile.email : (loading ? 'Loading...' : profile.email)}
-                </p>
-                {loading && <p className="text-xs text-blue-200 mt-1">Fetching from database...</p>}
-              </div>
+      <main className="section-container px-4 py-8 md:px-8 md:py-10">
+        <section className="rounded-[32px] bg-primary px-6 py-8 text-primary-foreground shadow-[0_24px_70px_-36px_rgba(31,92,84,0.9)] md:px-8">
+          <div className="flex items-center gap-4">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20">
+              <User className="h-10 w-10" />
+            </div>
+            <div>
+              <p className="text-sm uppercase tracking-[0.22em] text-primary-foreground/70">Account</p>
+              <h1 className="mt-2 font-display text-3xl font-bold md:text-4xl">
+                {dbProfile ? dbProfile.name : profile.name}
+              </h1>
+              <p className="mt-2 text-primary-foreground/75">
+                {dbProfile ? dbProfile.email : profile.email}
+              </p>
             </div>
           </div>
-          
+
           {dbProfile && (
-            <div className="p-6 bg-gray-50 border-t">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Patient ID:</span>
-                  <p className="font-medium text-gray-900 font-mono">{dbProfile.patient_id}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Phone:</span>
-                  <p className="font-medium text-gray-900">{dbProfile.phone}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Member Since:</span>
-                  <p className="font-medium text-gray-900">
-                    {new Date(dbProfile.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
+              <ProfileStat label="Patient ID" value={dbProfile.patient_id} mono />
+              <ProfileStat label="Phone" value={dbProfile.phone} />
+              <ProfileStat label="Member Since" value={new Date(dbProfile.created_at).toLocaleDateString()} />
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Settings Cards Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Change Phone Number */}
-          <div className="rounded-2xl bg-white shadow-lg p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-                <Phone className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Change Phone Number</h2>
-                <p className="text-sm text-gray-500">Update your contact number</p>
-              </div>
+        <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <ProfileCard icon={Phone} title="Change Phone Number" description="Update your contact number">
+            <div>
+              <Label htmlFor="phone">New Phone Number</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+91 98765 43210"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="mt-2"
+              />
             </div>
-            
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="phone" className="text-sm font-medium text-gray-700">New Phone Number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+91 98765 43210"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <Button 
-                onClick={handleChangePhone}
-                disabled={!phone}
-                className="w-full bg-[#00555A] hover:bg-[#004455] text-white"
-              >
-                Update Phone Number
-              </Button>
-            </div>
-          </div>
+            <Button onClick={handleChangePhone} disabled={!phone} className="w-full">
+              Update Phone Number
+            </Button>
+          </ProfileCard>
 
-          {/* Change Password */}
-          <div className="rounded-2xl bg-white shadow-lg p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                <Lock className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Change Password</h2>
-                <p className="text-sm text-gray-500">Update your account password</p>
-              </div>
+          <ProfileCard icon={Lock} title="Change Password" description="Update your account password">
+            <div>
+              <Label htmlFor="current-pw">Current Password</Label>
+              <Input id="current-pw" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="mt-2" />
             </div>
-            
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="current-pw" className="text-sm font-medium text-gray-700">Current Password</Label>
-                <Input
-                  id="current-pw"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="new-pw" className="text-sm font-medium text-gray-700">New Password</Label>
-                <Input
-                  id="new-pw"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="confirm-pw" className="text-sm font-medium text-gray-700">Confirm New Password</Label>
-                <Input
-                  id="confirm-pw"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <Button 
-                onClick={handleChangePassword}
-                disabled={!currentPassword || !newPassword || newPassword !== confirmPassword}
-                className="w-full bg-[#00555A] hover:bg-[#004455] text-white"
-              >
-                Change Password
-              </Button>
+            <div>
+              <Label htmlFor="new-pw">New Password</Label>
+              <Input id="new-pw" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-2" />
             </div>
-          </div>
+            <div>
+              <Label htmlFor="confirm-pw">Confirm New Password</Label>
+              <Input id="confirm-pw" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="mt-2" />
+            </div>
+            <Button onClick={handleChangePassword} disabled={!currentPassword || !newPassword || newPassword !== confirmPassword} className="w-full">
+              Change Password
+            </Button>
+          </ProfileCard>
 
-          {/* Delete Account */}
-          <div className="rounded-2xl bg-white shadow-lg p-6 lg:col-span-2">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-                <Trash2 className="h-6 w-6 text-red-600" />
-              </div>
+          <div className="lg:col-span-2">
+            <ProfileCard icon={Trash2} title="Delete Account" description="Permanently delete your account and all data" danger>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Delete Account</h2>
-                <p className="text-sm text-gray-500">Permanently delete your account and all data</p>
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="delete-pw" className="text-sm font-medium text-gray-700">Enter Password to Confirm</Label>
+                <Label htmlFor="delete-pw">Enter Password to Confirm</Label>
                 <Input
                   id="delete-pw"
                   type="password"
                   value={deletePassword}
                   onChange={(e) => setDeletePassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="mt-1"
+                  className="mt-2"
                 />
               </div>
-              <div className="flex gap-3">
-                <Button 
-                  onClick={handleDeleteAccount}
-                  disabled={!deletePassword}
-                  className="bg-red-600 hover:bg-red-700 text-white"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={handleDeleteAccount} disabled={!deletePassword} className="bg-red-600 text-white hover:bg-red-700">
+                  <Trash2 className="mr-2 h-4 w-4" />
                   Delete Account
                 </Button>
-                <Button 
-                  variant="outline"
-                  onClick={handleLogout}
-                  className="border-[#00555A] text-[#00555A] hover:bg-[#00555A] hover:text-white"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
+                <Button variant="outline" onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
                 </Button>
               </div>
-            </div>
+            </ProfileCard>
           </div>
-        </div>
+        </section>
       </main>
     </div>
   );
 };
+
+const ProfileStat = ({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) => (
+  <div className="rounded-[22px] bg-white/10 px-4 py-4">
+    <p className="text-sm text-primary-foreground/70">{label}</p>
+    <p className={`mt-2 text-lg font-bold text-white ${mono ? "font-mono" : ""}`}>{value}</p>
+  </div>
+);
+
+const ProfileCard = ({
+  icon: Icon,
+  title,
+  description,
+  children,
+  danger = false,
+}: {
+  icon: any;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  danger?: boolean;
+}) => (
+  <div className={`rounded-[28px] border p-6 shadow-sm ${danger ? "border-red-200 bg-red-50/50" : "border-border/70 bg-white"}`}>
+    <div className="mb-6 flex items-center gap-3">
+      <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${danger ? "bg-red-100 text-red-600" : "bg-secondary text-primary"}`}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        <h2 className="text-xl font-bold text-foreground">{title}</h2>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+    </div>
+    <div className="space-y-4">{children}</div>
+  </div>
+);
 
 export default PatientProfile;

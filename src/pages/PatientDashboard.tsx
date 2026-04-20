@@ -1,238 +1,145 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { usePatient } from "@/context/PatientContext";
-import { useQueue } from "@/context/QueueContext";
-import { Button } from "@/components/ui/button";
 import {
-  User,
+  Hash,
   CalendarCheck,
   Star,
-  Clock,
-  Hash,
-  Stethoscope,
-  UserCheck,
+  User,
 } from "lucide-react";
+
+type Appointment = {
+  id: number;
+  clinic_name: string;
+  doctor_name: string;
+  appointment_token: string;
+  date: string;
+  time: string;
+  status: string;
+  address?: string;
+};
 
 const PatientDashboard = () => {
   const navigate = useNavigate();
   const { profile } = usePatient();
-  const { currentToken, queueStats, fetchQueueStats } = useQueue();
-  const [patientToken, setPatientToken] = useState<any>(null);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
 
   useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => setMessage(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [message]);
-
-  useEffect(() => {
-    // Get logged-in patient's email to fetch their token
     const userStr = localStorage.getItem("user");
     if (userStr) {
       const user = JSON.parse(userStr);
-      fetchPatientToken(user.email);
+      if (user.email) {
+        fetchAppointments(user.email);
+      }
     } else {
       setLoading(false);
     }
   }, []);
 
-  const fetchPatientToken = async (patientEmail: string) => {
+  const fetchAppointments = async (patientEmail: string) => {
     try {
-      // Try to find patient's token by their email/phone
-      const response = await fetch(`http://localhost:8000/queue/patient-dashboard/${patientEmail}?clinic_id=ALL`);
+      const response = await fetch(`http://localhost:8000/auth/patient/appointments?email=${encodeURIComponent(patientEmail)}`);
       if (response.ok) {
         const data = await response.json();
-        if (data.your_token) {
-          setPatientToken({
-            token: `A-${data.your_token.token_number}`,
-            clinic: "Current Clinic",
-            doctor: "Available Doctor",
-            date: "Today",
-            time: "Now",
-            address: "Clinic Address",
-            status: data.status,
-            estimatedWaitMins: data.patients_ahead * 5,
-            patientsAhead: data.patients_ahead
-          });
-        }
+        setAppointments(data.appointments || []);
       }
     } catch (error) {
-      setMessage({text: "Failed to fetch patient token", type: "error"});
+      console.error("Failed to fetch appointments:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleAppointmentClick = (apt: Appointment) => {
+    navigate("/confirmation", {
+      state: {
+        token: apt.appointment_token,
+        clinic: apt.clinic_name,
+        doctor: apt.doctor_name,
+        date: apt.date,
+        time: apt.time,
+        address: apt.address || "",
+      },
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-primary" />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto max-w-2xl px-4 py-6">
-        {/* Top bar: title + profile circle */}
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <Link
-            to="/patient/profile"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00555A] text-white hover:opacity-90 transition-opacity"
-            aria-label="Profile"
-          >
-            <User className="h-5 w-5" />
-          </Link>
-        </div>
-
-        {/* Two main options */}
-        <div className="grid gap-4 sm:grid-cols-3 mb-8">
-          <Link to="/patient/find-clinics">
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md flex flex-col items-center text-center min-h-[140px] justify-center">
-              <CalendarCheck className="h-10 w-10 text-[#00555A] mb-3" />
-              <h3 className="font-semibold text-foreground">Book appointment</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Find clinics by location and book
+      <main className="section-container px-4 py-8 md:px-8 md:py-10">
+        <section className="rounded-[32px] bg-primary px-6 py-8 text-primary-foreground shadow-[0_24px_70px_-36px_rgba(31,92,84,0.9)] md:px-8">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.22em] text-primary-foreground/70">Patient Dashboard</p>
+              <h1 className="mt-3 font-display text-4xl font-bold tracking-tight md:text-5xl">{profile.name}</h1>
+              <p className="mt-3 text-primary-foreground/78">
+                {appointments.length > 0 ? "Your appointments are confirmed." : "Book a clinic visit and track it here."}
               </p>
             </div>
-          </Link>
-          <Link to="/confirmation">
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md flex flex-col items-center text-center min-h-[140px] justify-center">
-              <Hash className="h-10 w-10 text-[#00555A] mb-3" />
-              <h3 className="font-semibold text-foreground">My appointments</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                View your appointment tokens
-              </p>
-            </div>
-          </Link>
-          <Link to="/patient/reviews">
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md flex flex-col items-center text-center min-h-[140px] justify-center">
-              <Star className="h-10 w-10 text-[#00555A] mb-3" />
-              <h3 className="font-semibold text-foreground">Write review</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Review clinics you&apos;ve visited
-              </p>
-            </div>
-          </Link>
-        </div>
 
-        {/* Appointment details – only if they have an active booking */}
-        {patientToken && (
-          <>
-            {/* Token Details Section */}
-            <div className="mb-6 rounded-xl border border-border bg-card p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Hash className="h-5 w-5 text-[#00555A]" />
-                Your Appointment Details
-              </h2>
-              <div className="space-y-4">
-                {/* Your Token */}
-                <div className="flex items-center gap-3 rounded-lg bg-[#00555A]/10 px-4 py-3">
-                  <Hash className="h-5 w-5 text-[#00555A]" />
-                  <div className="flex-1">
-                    <p className="text-xs text-muted-foreground">Your Token</p>
-                    <p className="text-3xl font-bold text-[#00555A] tracking-wider">
-                      {patientToken.token}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Currently Serving */}
-                <div className="flex items-center gap-3 text-sm">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span>
-                    Currently serving: <strong className="text-[#00555A]">
-                      {patientToken.token_number ? `A-${patientToken.token_number}` : 'No one'}
-                    </strong>
-                  </span>
-                </div>
-
-                {/* Patients Ahead */}
-                <div className="flex items-center gap-3 text-sm">
-                  <UserCheck className="h-4 w-4 text-muted-foreground" />
-                  <span>
-                    Patients ahead: <strong>{patientToken.patients_ahead || 0}</strong>
-                  </span>
-                </div>
-
-                {/* Estimated Wait */}
-                <div className="flex items-center gap-3 text-sm">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span>
-                    Est. wait time:{" "}
-                    <strong>
-                      {patientToken.estimatedWaitMins || 0} mins
-                    </strong>
-                  </span>
-                </div>
-
-                {/* Status */}
-                <div className="flex items-center gap-3 text-sm">
-                  <Stethoscope className="h-4 w-4 text-muted-foreground" />
-                  <span>
-                    Status:{" "}
-                    <strong className="capitalize">
-                      {patientToken.status || 'waiting'}
-                    </strong>
-                  </span>
-                </div>
-
-                <div className="pt-4">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() =>
-                      navigate("/confirmation", {
-                        state: {
-                          token: patientToken.token,
-                          clinic: patientToken.clinic,
-                          doctor: patientToken.doctor || "Available Doctor",
-                          date: patientToken.date,
-                          time: patientToken.time,
-                          address: patientToken.address
-                        }
-                      })
-                    }
-                  >
-                    Track queue
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Queue Stats - Show real data from backend */}
-        {queueStats && (
-          <div className="grid gap-4 sm:grid-cols-3 mb-8">
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm text-center">
-              <h3 className="text-lg font-semibold text-foreground mb-2">Total Waiting</h3>
-              <p className="text-3xl font-bold text-[#00555A]">{queueStats.total_waiting}</p>
-              <p className="text-sm text-muted-foreground">patients in queue</p>
-            </div>
-            
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm text-center">
-              <h3 className="text-lg font-semibold text-foreground mb-2">Currently Serving</h3>
-              <p className="text-3xl font-bold text-green-600">{queueStats.currently_serving}</p>
-              <p className="text-sm text-muted-foreground">token number</p>
-            </div>
-            
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm text-center">
-              <h3 className="text-lg font-semibold text-foreground mb-2">Completed Today</h3>
-              <p className="text-3xl font-bold text-green-600">{queueStats.completed_today}</p>
-              <p className="text-sm text-muted-foreground">patients</p>
-            </div>
+            <Link
+              to="/patient/profile"
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 transition hover:bg-white/20"
+              aria-label="Profile"
+            >
+              <User className="h-5 w-5" />
+            </Link>
           </div>
-        )}
 
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Logged in as <strong>{profile.name}</strong> ({profile.email})
-        </p>
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            <Link
+              to="/patient/find-clinics"
+              className="rounded-[22px] bg-white/10 px-6 py-6 text-center transition hover:bg-white/20"
+            >
+              <CalendarCheck className="mx-auto h-8 w-8" />
+              <p className="mt-2 text-sm text-primary-foreground/70">Book</p>
+              <p className="mt-1 text-xl font-bold text-white">New Appointment</p>
+            </Link>
+            {appointments.length > 0 ? (
+              <Link
+                to="/confirmation"
+                state={{
+                  token: appointments[0].appointment_token,
+                  clinic: appointments[0].clinic_name,
+                  doctor: appointments[0].doctor_name,
+                  date: appointments[0].date,
+                  time: appointments[0].time,
+                  address: appointments[0].address || "",
+                }}
+                className="rounded-[22px] bg-white/10 px-6 py-6 text-center transition hover:bg-white/20"
+              >
+                <Hash className="mx-auto h-8 w-8" />
+                <p className="mt-2 text-sm text-primary-foreground/70">Appointment</p>
+                <p className="mt-1 text-xl font-bold text-white">{appointments[0].appointment_token}</p>
+              </Link>
+            ) : (
+              <Link
+                to="/confirmation"
+                className="rounded-[22px] bg-white/10 px-6 py-6 text-center transition hover:bg-white/20"
+              >
+                <Hash className="mx-auto h-8 w-8" />
+                <p className="mt-2 text-sm text-primary-foreground/70">Appointment</p>
+                <p className="mt-1 text-xl font-bold text-white">Booked Appointment</p>
+              </Link>
+            )}
+            <Link
+              to="/patient/reviews"
+              className="rounded-[22px] bg-white/10 px-6 py-6 text-center transition hover:bg-white/20"
+            >
+              <Star className="mx-auto h-8 w-8" />
+              <p className="mt-2 text-sm text-primary-foreground/70">Review</p>
+              <p className="mt-1 text-xl font-bold text-white">Write Feedback</p>
+            </Link>
+          </div>
+        </section>
       </main>
     </div>
   );

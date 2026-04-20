@@ -9,6 +9,8 @@ interface Slot {
   is_open: boolean;
 }
 
+const MAX_SLOTS = 3;
+
 const ClinicManageTime = () => {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,7 @@ const ClinicManageTime = () => {
 
   const addTimeSlot = async () => {
     if (!clinicId) return;
+    if (slots.length >= MAX_SLOTS) return;
     
     setSaving(true);
     try {
@@ -127,6 +130,7 @@ const ClinicManageTime = () => {
           </div>
           <Button
             onClick={() => setShowAddForm(true)}
+            disabled={slots.length >= MAX_SLOTS}
             className="bg-[#00555A] text-white hover:bg-[#00494F]"
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -206,6 +210,7 @@ const ClinicManageTime = () => {
         {/* Time Slots List */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Time Slots</h2>
+          <p className="mb-4 text-sm text-gray-500">{slots.length}/{MAX_SLOTS} slots used</p>
           
           {loading ? (
             <div className="text-center py-8 text-gray-500">Loading...</div>

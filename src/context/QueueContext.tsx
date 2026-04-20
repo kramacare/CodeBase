@@ -83,8 +83,10 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
       if (response.ok) {
         const data = await response.json();
         const appointments = data.appointments || [];
+        const servingAppointment = appointments.find((apt: any) => apt.status === "serving");
+        const waitingAppointments = appointments.filter((apt: any) => apt.status !== "serving");
 
-        const queueItems: QueueItem[] = appointments.map((apt: any, index: number) => ({
+        const queueItems: QueueItem[] = waitingAppointments.map((apt: any, index: number) => ({
           token: apt.token || `T-${index + 1}`,
           name: apt.patient_name,
           phone: apt.patient_phone,
@@ -96,10 +98,25 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
 
         setQueue(queueItems);
         setTotalToday(appointments.length);
+        setCurrentServing(
+          servingAppointment
+            ? {
+                patientName: servingAppointment.patient_name,
+                token: servingAppointment.token,
+                position: 1,
+                startTime: servingAppointment.created_at ? new Date(servingAppointment.created_at) : null,
+                appointmentId: servingAppointment.id,
+                clinicId: servingAppointment.clinic_id,
+                source: servingAppointment.source === "walkin" ? "walkin" : "online",
+              }
+            : null
+        );
 
-        if (appointments.length > 0) {
-          setCurrentToken(appointments.length);
-        }
+        setCurrentToken(
+          servingAppointment?.token
+            ? Number.parseInt(String(servingAppointment.token).replace(/[^\d]/g, ""), 10) || 0
+            : 0
+        );
       }
 
       const statsResponse = await fetch(`${API_BASE}/auth/queue/history/stats?clinic_id=${clinicId}`);
@@ -169,34 +186,29 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   const nextPatient = useCallback(async () => {
-    console.log("nextPatient called, currentServing:", currentServing);
-
-    // Move next patient to serving
     if (queue.length > 0) {
       const patient = queue[0];
-      const position = queue.length;
-      const appointmentId = patient.appointment_id;
+      try {
+        const response = await fetch(`${API_BASE}/auth/clinic/serve-patient`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clinic_id: patient.clinic_id,
+            appointment_id: patient.appointment_id,
+            source: patient.source,
+          }),
+        });
 
-      setCurrentServing({
-        patientName: patient.name,
-        token: patient.token,
-        position: position,
-        startTime: new Date(),
-        appointmentId: appointmentId,
-        clinicId: patient.clinic_id,
-        source: patient.source,
-      });
-
-      const newQueue = queue.slice(1);
-      setQueue(newQueue);
-      setTotalToday((prev) => prev - 1);
+        if (response.ok) {
+          await fetchQueueForClinic(patient.clinic_id);
+        }
+      } catch (error) {
+        console.error("Error serving patient:", error);
+      }
     }
-  }, [queue, currentServing]);
+  }, [queue, fetchQueueForClinic]);
 
   const completePatient = useCallback(async () => {
-    console.log("completePatient called, currentServing:", currentServing);
-
-    // Complete the current patient
     if (currentServing && currentServing.appointmentId) {
       try {
         const response = await fetch(`${API_BASE}/auth/clinic/finish-patient`, {
@@ -210,31 +222,36 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
         });
         
         if (response.ok) {
-          console.log("Patient completed and moved to history");
-          setCompletedCount(prev => prev + 1);
+          await fetchQueueForClinic(currentServing.clinicId || "");
         }
       } catch (error) {
         console.error("Error completing patient:", error);
       }
-      setCurrentServing(null);
     }
-  }, [currentServing]);
+  }, [currentServing, fetchQueueForClinic]);
 
   const skipPatient = useCallback(async () => {
     if (queue.length > 0) {
-      const skippedPatient = { ...queue[0], source: "skipped" as const };
-      const remainingQueue = queue.slice(1);
-      const newQueue = [
-        ...remainingQueue.slice(0, 2),
-        skippedPatient,
-        ...remainingQueue.slice(2),
-      ];
-      setQueue(newQueue);
-      setCurrentToken((prev) => prev + 1);
-      setSkippedCount((prev) => prev + 1);
-      setCurrentServing(null);
+      const patient = queue[0];
+      try {
+        const response = await fetch(`${API_BASE}/auth/clinic/skip-patient`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clinic_id: patient.clinic_id,
+            appointment_id: patient.appointment_id,
+            source: patient.source,
+          }),
+        });
+
+        if (response.ok) {
+          await fetchQueueForClinic(patient.clinic_id);
+        }
+      } catch (error) {
+        console.error("Error skipping patient:", error);
+      }
     }
-  }, [queue, currentServing]);
+  }, [queue, fetchQueueForClinic]);
 
   const addPatient = useCallback(
     (name: string, source: "online" | "desk") => {

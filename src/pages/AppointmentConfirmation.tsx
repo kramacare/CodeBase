@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { usePatient } from "@/context/PatientContext";
-import { CheckCircle2, MapPin, CalendarDays, Clock, Hash, Users, Timer } from "lucide-react";
+import { CalendarDays, Clock, Hash, MapPin, Stethoscope, Timer, Users } from "lucide-react";
 
 interface ConfirmationState {
   clinic: string;
@@ -26,8 +26,9 @@ interface AppointmentDetails {
   doctor_name: string;
   date: string;
   time: string;
-  token: string;
+  appointment_token: string;
   status: string;
+  address?: string;
   created_at: string;
 }
 
@@ -36,6 +37,7 @@ interface QueuePosition {
   estimated_wait_minutes: number;
   your_position: number;
   total_in_queue: number;
+  now_serving_token?: string;
 }
 
 const AppointmentConfirmation = () => {
@@ -45,96 +47,94 @@ const AppointmentConfirmation = () => {
   const [appointmentDetails, setAppointmentDetails] = useState<AppointmentDetails | null>(null);
   const [queuePosition, setQueuePosition] = useState<QueuePosition | null>(null);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
-
-  useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => setMessage(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [message]);
 
   useEffect(() => {
     const fetchAppointmentDetails = async () => {
       try {
-        // Get patient email from localStorage
         const userStr = localStorage.getItem("user");
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          
-          // Fetch appointments for this patient
-          const response = await fetch(`http://localhost:8000/auth/patient/appointments?email=${user.email}`);
-          if (response.ok) {
-            const data = await response.json();
-            if (data.appointments && data.appointments.length > 0) {
-              // Get only today's appointments
-              const today = new Date().toISOString().split('T')[0];
-              const todayAppointments = data.appointments.filter((apt: any) => apt.date === today);
-              
-              if (todayAppointments.length > 0) {
-                const latestAppointment = todayAppointments[0];
-                setAppointmentDetails(latestAppointment);
-                
-                // Fetch queue position based on clinic_id and token
-                const queueResponse = await fetch(
-                  `http://localhost:8000/auth/appointments/queue-position?clinic_id=${latestAppointment.clinic_id}&appointment_token=${latestAppointment.token}&appointment_id=${latestAppointment.id}`
-                );
-                if (queueResponse.ok) {
-                  const queueData = await queueResponse.json();
-                  setQueuePosition(queueData);
-                }
-              }
-            }
+        if (!userStr) {
+          setLoading(false);
+          return;
+        }
+
+        const user = JSON.parse(userStr);
+        const response = await fetch(`http://localhost:8000/auth/patient/appointments?email=${user.email}`);
+        if (!response.ok) {
+          setLoading(false);
+          return;
+        }
+
+        const data = await response.json();
+        const today = new Date().toISOString().split("T")[0];
+        const todayAppointments = (data.appointments || []).filter((apt: any) => apt.date === today);
+
+        if (todayAppointments.length > 0) {
+          const latestAppointment = todayAppointments[0];
+          setAppointmentDetails(latestAppointment);
+
+          const queueResponse = await fetch(
+            `http://localhost:8000/auth/appointments/queue-position?clinic_id=${latestAppointment.clinic_id}&appointment_token=${latestAppointment.appointment_token}&appointment_id=${latestAppointment.id}`
+          );
+          if (queueResponse.ok) {
+            const queueData = await queueResponse.json();
+            setQueuePosition(queueData);
           }
         }
       } catch (error) {
         console.error("Error fetching appointment details:", error);
-        setMessage({text: "Error fetching appointment details", type: "error"});
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAppointmentDetails();
+    void fetchAppointmentDetails();
   }, []);
 
+  const token = state?.token || appointmentDetails?.appointment_token || "T-1";
+  const clinicName = state?.clinic || appointmentDetails?.clinic_name || "Unknown Clinic";
+  const clinicAddress = state?.address || appointmentDetails?.address || "Clinic Address";
+  const doctorName = state?.doctor || appointmentDetails?.doctor_name || "Available Doctor";
+  const dateText = state?.date || appointmentDetails?.date || "";
+  const timeText = state?.time || appointmentDetails?.time || "";
+  const patientsAhead = queuePosition?.patients_ahead ?? 0;
+  const estimatedWait = queuePosition?.estimated_wait_minutes ?? 0;
+  const nowServing = queuePosition?.now_serving_token || token;
+
   useEffect(() => {
-    if (!state) return;
+    if (!token || !clinicName || !doctorName || !dateText || !timeText) return;
+
     setActiveAppointment({
-      token: state.token,
-      clinic: state.clinic,
-      doctor: state.doctor,
-      date: state.date,
-      time: state.time,
-      address: state.address,
-      status: "waiting",
-      estimatedWaitMins: 15,
-      patientsAhead: 4,
+      token,
+      clinic: clinicName,
+      doctor: doctorName,
+      date: dateText,
+      time: timeText,
+      address: clinicAddress,
+      status: appointmentDetails?.status === "serving" ? "with_doctor" : "waiting",
+      estimatedWaitMins: estimatedWait,
+      patientsAhead,
     });
     addVisit({
-      clinicId: `clinic-${state.token}`,
-      clinicName: state.clinic,
-      date: `${state.date} at ${state.time}`,
+      clinicId: `clinic-${token}`,
+      clinicName,
+      date: `${dateText} at ${timeText}`,
     });
-  }, [state, setActiveAppointment, addVisit]);
+  }, [token, clinicName, doctorName, dateText, timeText, clinicAddress, appointmentDetails, estimatedWait, patientsAhead, setActiveAppointment, addVisit]);
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-primary" />
       </div>
     );
   }
 
   if (!state && !appointmentDetails) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <p className="text-muted-foreground">No appointment data found.</p>
-          <Button
-            className="mt-4"
-            onClick={() => navigate("/patient")}
-          >
+          <Button className="mt-4" onClick={() => navigate("/patient")}>
             Go to Dashboard
           </Button>
         </div>
@@ -142,133 +142,52 @@ const AppointmentConfirmation = () => {
     );
   }
 
-  // Use state data if available, otherwise use appointmentDetails from API
-  const displayData = state || appointmentDetails;
-  
-  // Helper to safely get clinic name
-  const getClinicName = () => state?.clinic || appointmentDetails?.clinic_name || "Unknown Clinic";
-  const getClinicAddress = () => state?.address || "Clinic Address";
-  const getDoctorName = () => state?.doctor || appointmentDetails?.doctor_name || "Available Doctor";
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-secondary/30 px-4 py-12">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-lg">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle2 className="h-10 w-10 text-green-600" />
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+      <div className="w-full max-w-md">
+        <div className="rounded-[36px] bg-primary p-8 text-white shadow-[0_28px_80px_-40px_rgba(31,92,84,0.9)]">
+          <p className="text-sm uppercase tracking-[0.28em] text-white/70">Your Token</p>
+          <p className="mt-4 font-display text-6xl font-bold tracking-tight">{token}</p>
+
+          <div className="mt-8 grid grid-cols-2 gap-4">
+            <div className="rounded-[24px] bg-white/10 p-5">
+              <p className="text-sm text-white/70">Now serving</p>
+              <p className="mt-3 text-3xl font-bold">{nowServing}</p>
+            </div>
+            <div className="rounded-[24px] bg-white/10 p-5">
+              <p className="text-sm text-white/70">Estimated wait</p>
+              <p className="mt-3 text-3xl font-bold">{estimatedWait} min</p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-[24px] bg-white/10 p-5">
+            <p className="text-sm text-white/70">Patients ahead</p>
+            <p className="mt-3 text-3xl font-bold">{patientsAhead}</p>
+          </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-foreground">
-          Appointment Booked!
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Your appointment has been confirmed
-        </p>
-
-        {/* Token Display */}
-        <div className="mt-6 rounded-xl bg-[#00555A] p-6 text-white">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <Hash className="h-6 w-6" />
-            <span className="text-sm uppercase tracking-wide">Your Token</span>
-          </div>
-          <p className="text-5xl font-bold tracking-widest">
-            {displayData?.token || "T-1"}
-          </p>
-        </div>
-
-        <div className="mt-6 space-y-3">
-          {/* Patient Info - From state or API */}
-          {(state?.patient_name || appointmentDetails?.patient_name) && (
-            <div className="flex items-start gap-3 rounded-lg bg-blue-50 p-3">
-              <div className="flex-1">
-                <p className="text-xs text-muted-foreground">Patient</p>
-                <p className="font-medium text-foreground">{state?.patient_name || appointmentDetails?.patient_name}</p>
-                <p className="text-xs text-muted-foreground">{state?.patient_email || appointmentDetails?.patient_email}</p>
-                <p className="text-xs text-muted-foreground">{state?.patient_phone || appointmentDetails?.patient_phone}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Date & Time */}
-          <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
-            <CalendarDays className="mt-0.5 h-5 w-5 shrink-0 text-[#00555A]" />
-            <div>
-              <p className="text-xs text-muted-foreground">Date & Time</p>
-              <p className="font-medium text-foreground">
-                {displayData?.date || appointmentDetails?.date} at {displayData?.time || appointmentDetails?.time}
-              </p>
-            </div>
-          </div>
-
-          {/* Clinic */}
-          <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
-            <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-[#00555A]" />
-            <div>
-              <p className="text-xs text-muted-foreground">Clinic</p>
-              <p className="font-medium text-foreground">{getClinicName()}</p>
-              <p className="text-xs text-muted-foreground">{getClinicAddress()}</p>
-            </div>
-          </div>
-
-          {/* Doctor */}
-          <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
-            <Clock className="mt-0.5 h-5 w-5 shrink-0 text-[#00555A]" />
-            <div>
-              <p className="text-xs text-muted-foreground">Doctor</p>
-              <p className="font-medium text-foreground">{getDoctorName()}</p>
-            </div>
-          </div>
-
-          {/* Queue Info - Actual from database */}
-          {queuePosition && (
-            <div className="flex items-start gap-3 rounded-lg bg-orange-50 p-3">
-              <Users className="mt-0.5 h-5 w-5 shrink-0 text-orange-500" />
+        <div className="mt-5 rounded-[28px] border border-border/70 bg-white p-6 shadow-sm">
+          <div className="space-y-4">
+            <DetailRow icon={MapPin} label="Clinic" value={clinicName} subvalue={clinicAddress} />
+            <DetailRow icon={Stethoscope} label="Doctor" value={doctorName} />
+            <DetailRow icon={CalendarDays} label="Appointment" value={`${dateText} at ${timeText}`} />
+            <div className="grid grid-cols-2 gap-4 rounded-[20px] bg-secondary/60 p-4">
               <div>
-                <p className="text-xs text-muted-foreground">Patients Ahead</p>
-                <p className="font-medium text-foreground">{queuePosition.patients_ahead} patients</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Token</p>
+                <p className="mt-1 text-lg font-bold text-foreground">{token}</p>
               </div>
-            </div>
-          )}
-
-          {/* Estimated Time - Actual from database */}
-          {queuePosition && (
-            <div className="flex items-start gap-3 rounded-lg bg-green-50 p-3">
-              <Timer className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
               <div>
-                <p className="text-xs text-muted-foreground">Estimated Wait</p>
-                <p className="font-medium text-foreground">{queuePosition.estimated_wait_minutes} minutes</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Position</p>
+                <p className="mt-1 text-lg font-bold text-foreground">
+                  {queuePosition ? `${queuePosition.your_position} / ${queuePosition.total_in_queue}` : "1 / 1"}
+                </p>
               </div>
-            </div>
-          )}
-
-          {/* Your Position */}
-          {queuePosition && (
-            <div className="flex items-start gap-3 rounded-lg bg-purple-50 p-3">
-              <Hash className="mt-0.5 h-5 w-5 shrink-0 text-purple-500" />
-              <div>
-                <p className="text-xs text-muted-foreground">Your Position in Queue</p>
-                <p className="font-medium text-foreground">{queuePosition.your_position} of {queuePosition.total_in_queue}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Status */}
-          <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
-            <div>
-              <p className="text-xs text-muted-foreground">Status</p>
-              <p className="font-medium text-foreground capitalize">
-                {appointmentDetails?.status || "booked"}
-              </p>
             </div>
           </div>
         </div>
 
-        <div className="mt-6 space-y-3">
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => navigate("/patient")}
-          >
+        <div className="mt-5">
+          <Button variant="outline" className="w-full" onClick={() => navigate("/patient")}>
             Back to Dashboard
           </Button>
         </div>
@@ -276,5 +195,26 @@ const AppointmentConfirmation = () => {
     </div>
   );
 };
+
+const DetailRow = ({
+  icon: Icon,
+  label,
+  value,
+  subvalue,
+}: {
+  icon: any;
+  label: string;
+  value: string;
+  subvalue?: string;
+}) => (
+  <div className="flex items-start gap-3">
+    <Icon className="mt-0.5 h-5 w-5 text-primary" />
+    <div>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="font-semibold text-foreground">{value}</p>
+      {subvalue ? <p className="text-sm text-muted-foreground">{subvalue}</p> : null}
+    </div>
+  </div>
+);
 
 export default AppointmentConfirmation;

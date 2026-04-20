@@ -1098,6 +1098,8 @@ async def get_patient_appointments_by_email(
     """
     Get all appointments for a specific patient by email.
     """
+    from app.database.models import Clinic
+    
     result = await db.execute(
         select(Appointment).where(Appointment.patient_email == email).order_by(Appointment.id)
     )
@@ -1105,10 +1107,20 @@ async def get_patient_appointments_by_email(
     
     appointment_list = []
     for apt in appointments:
+        clinic_name = apt.clinic_id
+        clinic_result = await db.execute(
+            select(Clinic).where(Clinic.clinic_id == apt.clinic_id)
+        )
+        clinic = clinic_result.scalar_one_or_none()
+        if clinic:
+            clinic_name = clinic.clinic_name
+            
         appointment_list.append({
             "id": apt.id,
-            "token": apt.appointment_token,
+            "appointment_token": apt.appointment_token,
             "clinic_id": apt.clinic_id,
+            "clinic_name": clinic_name,
+            "address": clinic.address if clinic else "",
             "patient_id": apt.patient_id,
             "patient_name": apt.patient_name,
             "patient_email": apt.patient_email,
@@ -1284,19 +1296,29 @@ async def get_queue_position(
     Returns number of patients ahead, estimated wait time, and current position.
     """
     from datetime import datetime
+
+    def parse_token_number(token: str | None) -> int:
+        if not token:
+            return 0
+        digits = "".join(ch for ch in token if ch.isdigit())
+        return int(digits) if digits else 0
     
     # Get today's date
     today = datetime.now().strftime("%Y-%m-%d")
     
-    # Get all booked appointments for this clinic today, ordered by ID
+    # Get all active appointments for this clinic today.
     result = await db.execute(
         select(Appointment).where(
             Appointment.clinic_id == clinic_id,
             Appointment.date == today,
-            Appointment.status == "booked"
-        ).order_by(Appointment.id)
+            Appointment.status.in_(["booked", "serving"])
+        )
     )
     appointments = result.scalars().all()
+    appointments = sorted(
+        appointments,
+        key=lambda apt: (parse_token_number(apt.appointment_token), apt.id)
+    )
     
     # Find the current appointment's position
     total_in_queue = len(appointments)
@@ -1304,16 +1326,27 @@ async def get_queue_position(
     your_position = 0
     patients_ahead = 0
     
+    current_appointment = None
     for index, apt in enumerate(appointments):
-        if apt.id == appointment_id:
+        if apt.id == appointment_id or apt.appointment_token == appointment_token:
+            current_appointment = apt
             your_position = index + 1
             patients_ahead = index
             break
+
+    if current_appointment is None:
+        your_position = min(parse_token_number(appointment_token) + 1, total_in_queue) if total_in_queue else 1
+        patients_ahead = max(your_position - 1, 0)
     
-    # Get current serving token (first appointment in queue that hasn't been served)
-    current_token_num = 1
-    if appointments and len(appointments) > 0:
-        current_token_num = 1  # Start from T-0
+    serving_appointment = next((apt for apt in appointments if apt.status == "serving"), None)
+    if serving_appointment:
+        now_serving_token = serving_appointment.appointment_token
+    elif current_appointment and your_position > 1:
+        now_serving_token = appointments[your_position - 2].appointment_token
+    elif appointments:
+        now_serving_token = appointments[0].appointment_token
+    else:
+        now_serving_token = appointment_token
     
     # Calculate estimated wait time (15 minutes per patient ahead)
     estimated_wait_minutes = patients_ahead * 15
@@ -1323,7 +1356,8 @@ async def get_queue_position(
         "estimated_wait_minutes": estimated_wait_minutes,
         "your_position": your_position,
         "total_in_queue": total_in_queue,
-        "current_token": current_token_num,
+        "current_token": your_position,
+        "now_serving_token": now_serving_token,
         "status": "in_queue"
     }
 

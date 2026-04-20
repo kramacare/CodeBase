@@ -4,44 +4,44 @@
 
 @layer base {
   :root {
-    --background: 0 0% 96%; /* #F5F5F5 */
-    --foreground: 210 13% 6%; /* #0F172A */
+    --background: 42 33% 97%;
+    --foreground: 164 28% 12%;
 
-    --card: 0 0% 100%; /* #FFFFFF */
-    --card-foreground: 210 13% 6%; /* #0F172A */
+    --card: 0 0% 100%;
+    --card-foreground: 164 28% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 210 13% 6%;
+    --popover-foreground: 164 28% 12%;
 
-    --primary: 177 100% 17%; /* #00555A Deep Teal */
+    --primary: 169 52% 24%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 210 13% 6%;
+    --secondary: 38 31% 93%;
+    --secondary-foreground: 164 28% 12%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 36 28% 94%;
+    --muted-foreground: 160 12% 39%;
 
-    --accent: 177 100% 50%; /* #00FFF0 Aqua */
-    --accent-foreground: 0 0% 100%;
+    --accent: 24 90% 63%;
+    --accent-foreground: 164 28% 12%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 177 100% 50%; /* #00FFF0 Aqua */
+    --border: 30 21% 87%;
+    --input: 30 21% 87%;
+    --ring: 169 52% 24%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 177 100% 17%; /* #00555A Deep Teal */
+    --sidebar-primary: 169 52% 24%;
     --sidebar-primary-foreground: 0 0% 98%;
     --sidebar-accent: 240 4.8% 95.9%;
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 177 100% 50%; /* #00FFF0 Aqua */
+    --sidebar-ring: 169 52% 24%;
   }
 
   .dark {
@@ -79,16 +79,30 @@
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: "DM Sans", system-ui, sans-serif;
+    background-image:
+      radial-gradient(circle at top left, rgba(219, 178, 112, 0.12), transparent 28%),
+      radial-gradient(circle at top right, rgba(28, 94, 86, 0.1), transparent 24%);
   }
 }
 
 @layer utilities {
   .section-padding {
-    @apply px-4 py-16 md:px-8 md:py-24 lg:py-28;
+    @apply px-4 py-16 md:px-8 md:py-20 lg:py-24;
   }
+
   .section-container {
     @apply mx-auto max-w-7xl;
+  }
+
+  .glass-panel {
+    @apply border border-white/60 bg-white/75 shadow-[0_18px_60px_-28px_rgba(19,55,50,0.35)] backdrop-blur-xl;
   }
 }

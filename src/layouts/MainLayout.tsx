@@ -1,17 +1,13 @@
-import React from "react";
+import Footer from "@/components/landing/Footer";
 import Header from "@/components/layout/Header";
+import React from "react";
 
 const MainLayout = ({ children }: { children: React.ReactNode }) => {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      {/* Page Content */}
       <main className="flex-1">{children}</main>
-
-      {/* Footer */}
-      <footer className="p-4 border-t text-sm text-center">
-        © 2026 Krama
-      </footer>
+      <Footer />
     </div>
   );
 };

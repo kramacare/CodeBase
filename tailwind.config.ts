@@ -12,8 +12,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['"Inter"', "system-ui", "sans-serif"],
-        display: ['"Plus Jakarta Sans"', '"Inter"', "sans-serif"],
+        sans: ['"DM Sans"', "system-ui", "sans-serif"],
+        display: ['"Space Grotesk"', '"DM Sans"', "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -59,14 +59,13 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        // Custom design system colors
-        "deep-teal": "#00555A",
-        "aqua": "#00FFF0",
-        "gold": "#FFC107",
-        "gold-light": "#FFD54F",
-        "gold-dark": "#FFA000",
-        "light-bg": "#F5F5F5",
-        "dark-text": "#0F172A",
+        "deep-teal": "#1f5c54",
+        "aqua": "#d9f3ee",
+        "gold": "#e0a458",
+        "gold-light": "#f1c78e",
+        "gold-dark": "#bb7b2d",
+        "light-bg": "#f7f3ed",
+        "dark-text": "#17312d",
       },
       borderRadius: {
         lg: "var(--radius)",
