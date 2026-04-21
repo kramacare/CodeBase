@@ -57,6 +57,7 @@ class Appointment(Base):
     date = Column(String, nullable=False)
     time = Column(String, nullable=False)
     status = Column(String, default="booked")
+    notification_stage = Column(String, default="pending")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     source = Column(String, default="online")
 
@@ -86,6 +87,7 @@ class ClinicTimeSlot(Base):
     id = Column(Integer, primary_key=True, index=True)
     clinic_id = Column(String, unique=True, nullable=False, index=True)
     slots = Column(JSON, default=list)  # Array of {slot_name, time_range, is_open}
+    slot = Column(ARRAY(String), default=list)  # Array of "open"/"close" for each slot
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

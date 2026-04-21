@@ -25,6 +25,13 @@ async def startup():
     async with engine.begin() as conn:
         # Create tables if they don't exist
         await conn.run_sync(Base.metadata.create_all)
+        # Backfill new queue-email tracking column for existing databases.
+        await conn.execute(
+            text(
+                "ALTER TABLE appointments "
+                "ADD COLUMN IF NOT EXISTS notification_stage VARCHAR DEFAULT 'pending'"
+            )
+        )
 
 @app.get("/")
 async def root():

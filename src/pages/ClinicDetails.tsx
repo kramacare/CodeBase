@@ -146,8 +146,11 @@ const ClinicDetails = () => {
         const currentMinute = now.getMinutes();
         const currentTimeMinutes = currentHour * 60 + currentMinute;
         
+        // Use slot array from database to determine open/close status
+        const slotArray = data.slot || [];
+        
         // Process slots and add disabled status based on current time
-        const processedSlots = (data.slots || []).map((slot: any) => {
+        const processedSlots = (data.slots || []).map((slot: any, idx: number) => {
           const startHour = slot.time_range[0];
           const endHour = slot.time_range[1];
           const endTimeMinutes = endHour * 60;
@@ -155,11 +158,14 @@ const ClinicDetails = () => {
           
           // Check if slot is expired (current time past cutoff)
           const isExpired = currentTimeMinutes >= cutoffTime;
+          // Use slot array to determine if open or closed
+          const isOpen = slotArray[idx] === "open";
           
           return {
             ...slot,
+            is_open: isOpen,
             is_expired: isExpired,
-            display_status: isExpired ? "Expired" : (slot.is_open ? "Available" : "Closed")
+            display_status: isExpired ? "Expired" : (isOpen ? "Available" : "Not Available")
           };
         });
         
@@ -183,9 +189,11 @@ const ClinicDetails = () => {
   };
 
   const handleSlotSelect = (slot: any) => {
-    if (slot.is_open) {
-      setSelectedTime(`${slot.slot_name} ${slot.time_range[0]}:00 - ${slot.time_range[1]}:00`);
-    }
+    if (!slot.is_open || slot.is_expired) return;
+    
+    // Set selected time
+    const timeString = `${slot.slot_name} ${slot.time_range[0]}:00 - ${slot.time_range[1]}:00`;
+    setSelectedTime(timeString);
   };
 
   const handleConfirmBooking = async () => {
@@ -208,9 +216,55 @@ const ClinicDetails = () => {
       return;
     }
 
+    // Check if patient already has an active booking for this clinic
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      const patientEmail = user.email;
+      const clinicId = clinic.clinic_id || id;
+      
+      try {
+        const appointmentsResponse = await fetch(`http://localhost:8000/auth/patient/appointments?email=${patientEmail}`);
+        if (appointmentsResponse.ok) {
+          const appointmentsData = await appointmentsResponse.json();
+          const activeBooking = appointmentsData.appointments?.find((apt: any) => 
+            apt.clinic_id === clinicId && 
+            apt.status !== "served" && 
+            apt.status !== "completed" &&
+            apt.status !== "cancelled"
+          );
+          
+          if (activeBooking) {
+            // Show alert and navigate to confirmation
+            alert("You have already booked this clinic. Please wait until your appointment is served.");
+            navigate("/confirmation", {
+              state: {
+                clinic: clinic.clinic_name,
+                doctor: clinic.doctor_name || "Available Doctor",
+                date: activeBooking.date,
+                time: activeBooking.time,
+                address: clinic.address,
+                token: activeBooking.appointment_token,
+                patient_name: activeBooking.patient_name,
+                patient_phone: activeBooking.patient_phone,
+                patient_email: activeBooking.patient_email
+              }
+            });
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Error checking existing bookings:", e);
+      }
+    }
+
+    if (!userStr) {
+      setMessage({text: "Please login to book appointment", type: "error"});
+      return;
+    }
+
     setBooking(true);
     try {
-      const userStr = localStorage.getItem("user");
       const user = JSON.parse(userStr);
 
       const clinicId = clinic.clinic_id || id;
@@ -489,12 +543,12 @@ const ClinicDetails = () => {
                   <button
                     key={index}
                     onClick={() => handleSlotSelect(slot)}
-                    disabled={!slot.is_open || slot.is_expired}
+                    disabled={!slot.is_open || slot.is_expired || booking}
                     className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
                       slot.is_expired
                         ? "bg-gray-50 border-gray-200 cursor-not-allowed opacity-50"
                         : !slot.is_open
-                          ? "bg-gray-100 border-gray-200 cursor-not-allowed opacity-60"
+                          ? "bg-red-50 border-red-200 cursor-not-allowed opacity-60"
                           : selectedTime === `${slot.slot_name} ${slot.time_range[0]}:00 - ${slot.time_range[1]}:00`
                             ? "border-[#00555A] bg-[#00555A]/10"
                             : "border-border bg-card hover:border-[#00555A]"
@@ -531,7 +585,7 @@ const ClinicDetails = () => {
                 disabled={!selectedTime || booking}
                 className="w-full bg-[#00555A] hover:bg-[#004455] text-white disabled:opacity-50"
               >
-                {booking ? "Booking..." : "Confirm Booking"}
+                {booking ? "Booking..." : "Book"}
               </Button>
             </div>
           </div>

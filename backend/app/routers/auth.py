@@ -928,6 +928,26 @@ async def create_appointment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You already have an appointment booked for this clinic on this date"
         )
+
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.clinic_id == clinic_id,
+            Appointment.date == date,
+            Appointment.status.in_(["booked", "serving"])
+        )
+    )
+    active_online = len(result.scalars().all())
+
+    result = await db.execute(
+        select(QRAppointment).where(
+            QRAppointment.clinic_id == clinic_id,
+            QRAppointment.date == date,
+            QRAppointment.status.in_(["booked", "serving"])
+        )
+    )
+    active_walkin = len(result.scalars().all())
+
+    is_first_active_patient = (active_online + active_walkin) == 0
     
     # Get next token number for this clinic AND date (start from T-0 for each date)
     # Count from BOTH tables (online appointments + QR walk-ins) for unified numbering
@@ -1019,6 +1039,21 @@ async def create_appointment(
     db.add(new_appointment)
     await db.commit()
     await db.refresh(new_appointment)
+
+    if is_first_active_patient:
+        from app.services.email_service import send_queue_alert
+
+        email_to = (patient_email or "").strip()
+        if email_to:
+            email_sent = send_queue_alert(
+                email_to,
+                patient_name,
+                clinic.clinic_name if clinic else clinic_id,
+                "immediate",
+            )
+            if email_sent:
+                new_appointment.notification_stage = "immediate"
+                await db.commit()
     
     return {
         "message": "Appointment booked successfully",

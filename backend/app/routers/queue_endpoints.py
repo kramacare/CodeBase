@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.database.db import get_db
 from app.database.models import Appointment, CompletedAppointment, QRAppointment, ClinicTimeSlot, Clinic
+from app.services.email_service import send_queue_alert
 
 router = APIRouter(prefix="/auth", tags=["queue"])
 
@@ -12,6 +13,111 @@ def _token_number(token: str | None) -> int:
         return 0
     digits = "".join(ch for ch in token if ch.isdigit())
     return int(digits) if digits else 0
+
+
+async def _send_queue_notifications(clinic_id: str, db: AsyncSession) -> None:
+    """Notify patients when they are close to being served."""
+    from datetime import datetime
+    import logging
+
+    logger = logging.getLogger(__name__)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    clinic_result = await db.execute(
+        select(Clinic).where(Clinic.clinic_id == clinic_id)
+    )
+    clinic = clinic_result.scalar_one_or_none()
+    clinic_name = clinic.clinic_name if clinic else clinic_id
+
+    online_result = await db.execute(
+        select(Appointment).where(
+            Appointment.clinic_id == clinic_id,
+            Appointment.date == today
+        )
+    )
+    walkin_result = await db.execute(
+        select(QRAppointment).where(
+            QRAppointment.clinic_id == clinic_id,
+            QRAppointment.date == today
+        )
+    )
+
+    combined_queue = []
+    for item in online_result.scalars().all():
+        combined_queue.append({
+            "kind": "online",
+            "item": item,
+            "token": item.appointment_token,
+            "created_at": item.created_at or datetime.min,
+            "status": item.status or "booked",
+        })
+    for item in walkin_result.scalars().all():
+        combined_queue.append({
+            "kind": "walkin",
+            "item": item,
+            "token": item.appointment_token,
+            "created_at": item.created_at or datetime.min,
+            "status": item.status or "booked",
+        })
+
+    combined_queue.sort(
+        key=lambda entry: (
+            0 if entry["status"] == "serving" else 1,
+            _token_number(entry["token"]),
+            entry["created_at"],
+        )
+    )
+
+    serving_index = next(
+        (index for index, entry in enumerate(combined_queue) if entry["status"] == "serving"),
+        None,
+    )
+    if serving_index is None:
+        return
+
+    for index, entry in enumerate(combined_queue):
+        if entry["kind"] != "online":
+            continue
+
+        appointment = entry["item"]
+        patient_email = (appointment.patient_email or "").strip()
+        if not patient_email:
+            continue
+
+        distance_from_serving = index - serving_index
+        target_stage = None
+
+        if distance_from_serving == 1:
+            target_stage = "immediate"
+        elif distance_from_serving == 2 and appointment.notification_stage == "pending":
+            target_stage = "two_ahead"
+
+        if not target_stage:
+            continue
+
+        if appointment.notification_stage == target_stage:
+            continue
+
+        email_sent = send_queue_alert(
+            patient_email,
+            appointment.patient_name,
+            clinic_name,
+            target_stage,
+        )
+        if email_sent:
+            appointment.notification_stage = target_stage
+            logger.info(
+                "Queue alert sent to %s for clinic %s at stage %s",
+                patient_email,
+                clinic_id,
+                target_stage,
+            )
+        else:
+            logger.warning(
+                "Queue alert email could not be sent to %s for clinic %s",
+                patient_email,
+                clinic_id,
+            )
 
 @router.post("/clinic/set-active")
 async def set_clinic_active(
@@ -111,6 +217,9 @@ async def serve_patient(
     
     # Update status to serving
     appointment.status = "serving"
+    if hasattr(appointment, "notification_stage"):
+        appointment.notification_stage = "serving"
+    await _send_queue_notifications(clinic_id, db)
     await db.commit()
     
     return {
@@ -292,7 +401,8 @@ async def skip_patient(
                 doctor_name=skipped_appointment.doctor_name,
                 date=skipped_appointment.date,
                 time=skipped_appointment.time,
-                status="skipped"
+                status="skipped",
+                notification_stage=getattr(skipped_appointment, "notification_stage", "pending")
             )
         db.add(new_appointment)
         await db.commit()
@@ -632,7 +742,16 @@ async def get_time_slots(
     if isinstance(slots, str):
         slots = json.loads(slots)
     
-    return {"clinic_id": clinic_id, "slots": slots or []}
+    # Handle slot array
+    slot_array = record.slot or []
+    if isinstance(slot_array, str):
+        slot_array = json.loads(slot_array) if slot_array else []
+    
+    return {
+        "clinic_id": clinic_id, 
+        "slots": slots or [], 
+        "slot": slot_array or []
+    }
 
 @router.post("/clinic/time-slots")
 async def add_time_slot(
@@ -671,7 +790,8 @@ async def add_time_slot(
         # Create new record with this slot
         record = ClinicTimeSlot(
             clinic_id=clinic_id,
-            slots=[new_slot]
+            slots=[new_slot],
+            slot=["close"]  # Initialize slot array with default "close"
         )
         db.add(record)
     else:
@@ -687,6 +807,14 @@ async def add_time_slot(
             )
         current_slots.append(new_slot)
         record.slots = current_slots
+        
+        # Also append to slot array
+        slot_array = record.slot or []
+        if isinstance(slot_array, str):
+            slot_array = json.loads(slot_array) if slot_array else []
+        slot_array = list(slot_array)
+        slot_array.append("close")  # New slot defaults to "close"
+        record.slot = slot_array
     
     await db.commit()
     await db.refresh(record)
@@ -694,7 +822,8 @@ async def add_time_slot(
     return {
         "message": "Time slot added successfully",
         "clinic_id": clinic_id,
-        "slots": record.slots
+        "slots": record.slots,
+        "slot": record.slot
     }
 
 @router.put("/clinic/time-slots/{slot_index}")
@@ -741,6 +870,23 @@ async def update_time_slot(
         else:
             slots[slot_index]["is_open"] = bool(new_value)
     
+    # Update slot array at specific index if provided (open or close)
+    if "slot" in request:
+        # Ensure slot array exists and has correct length
+        slot_array = record.slot or []
+        if isinstance(slot_array, str):
+            import json
+            slot_array = json.loads(slot_array) if slot_array else []
+        slot_array = list(slot_array)
+        
+        # Extend array if needed
+        while len(slot_array) <= slot_index:
+            slot_array.append("close")
+        
+        # Update the specific index
+        slot_array[slot_index] = request["slot"]
+        record.slot = slot_array
+    
     record.slots = slots
     await db.commit()
     await db.refresh(record)
@@ -748,7 +894,8 @@ async def update_time_slot(
     return {
         "message": "Time slot updated successfully",
         "clinic_id": clinic_id,
-        "slots": record.slots
+        "slots": record.slots,
+        "slot": record.slot
     }
 
 @router.delete("/clinic/time-slots/{slot_index}")

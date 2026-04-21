@@ -98,19 +98,24 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
 
         setQueue(queueItems);
         setTotalToday(appointments.length);
-        setCurrentServing(
-          servingAppointment
-            ? {
-                patientName: servingAppointment.patient_name,
-                token: servingAppointment.token,
-                position: 1,
-                startTime: servingAppointment.created_at ? new Date(servingAppointment.created_at) : null,
-                appointmentId: servingAppointment.id,
-                clinicId: servingAppointment.clinic_id,
-                source: servingAppointment.source === "walkin" ? "walkin" : "online",
-              }
-            : null
-        );
+        
+        // Preserve existing startTime if already set (when clicking Next)
+        const existingStartTime = currentServing?.startTime;
+        
+        if (servingAppointment) {
+          setCurrentServing({
+            patientName: servingAppointment.patient_name,
+            token: servingAppointment.token,
+            position: 1,
+            // Use existing startTime if set, otherwise use created_at
+            startTime: existingStartTime || (servingAppointment.created_at ? new Date(servingAppointment.created_at) : null),
+            appointmentId: servingAppointment.id,
+            clinicId: servingAppointment.clinic_id,
+            source: servingAppointment.source === "walkin" ? "walkin" : "online",
+          });
+        } else {
+          setCurrentServing(null);
+        }
 
         setCurrentToken(
           servingAppointment?.token
@@ -200,7 +205,24 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         if (response.ok) {
-          await fetchQueueForClinic(patient.clinic_id);
+          // Set start time to now when starting to serve - before fetch
+          const startTimeNow = new Date();
+          setCurrentServing(prev => prev ? { 
+            ...prev, 
+            startTime: startTimeNow,
+            patientName: patient.name,
+            token: patient.token,
+            appointmentId: patient.appointment_id,
+            clinicId: patient.clinic_id,
+          } : null);
+          
+          // Remove from queue
+          setQueue(prev => prev.slice(1));
+          
+          // Refresh after a short delay to let timer start
+          setTimeout(() => {
+            fetchQueueForClinic(patient.clinic_id);
+          }, 500);
         }
       } catch (error) {
         console.error("Error serving patient:", error);

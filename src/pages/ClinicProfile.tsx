@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Phone, Lock, Trash2, User, LogOut, Building2, QrCode, MapPin, ImagePlus, X } from "lucide-react";
+import { ArrowLeft, Phone, Lock, Trash2, User, LogOut, Building2, QrCode, MapPin, ImagePlus, X, Download } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -309,6 +309,151 @@ const ClinicProfile = () => {
     return `${window.location.origin}/walkin?clinic_id=${dbProfile.clinic_id}`;
   };
 
+  const downloadClinicQr = async () => {
+    const clinicQrUrl = getClinicQrUrl();
+    if (!clinicQrUrl) return;
+
+    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(clinicQrUrl)}`;
+
+    try {
+      const response = await fetch(qrImageUrl);
+      if (!response.ok) {
+        setMessage({ text: "Failed to download QR code", type: "error" });
+        return;
+      }
+
+      const qrBlob = await response.blob();
+      const qrObjectUrl = URL.createObjectURL(qrBlob);
+
+      const qrImg = new Image();
+      qrImg.src = qrObjectUrl;
+
+      await new Promise<void>((resolve, reject) => {
+        qrImg.onload = () => resolve();
+        qrImg.onerror = () => reject(new Error("Failed to load QR image"));
+      });
+
+      // A4 portrait at ~150dpi: 1240x1754
+      const width = 1240;
+      const height = 1754;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(qrObjectUrl);
+        setMessage({ text: "Failed to generate QR sheet", type: "error" });
+        return;
+      }
+
+      // Background
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, width, height);
+
+      // Header: KRAMA
+      ctx.fillStyle = "#00555A";
+      ctx.font = "bold 64px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("KRAMA", width / 2, 140);
+
+      // Clinic name
+      ctx.fillStyle = "#0F172A";
+      ctx.font = "bold 42px Arial";
+      const clinicName = dbProfile?.clinic_name || "Clinic";
+      ctx.fillText(clinicName, width / 2, 220);
+
+      // Doctor name
+      ctx.fillStyle = "#334155";
+      ctx.font = "28px Arial";
+      const doctorName = dbProfile?.doctor_name || "Doctor";
+      ctx.fillText(doctorName, width / 2, 270);
+
+      // QR placement
+      const qrSize = 720;
+      const qrX = (width - qrSize) / 2;
+      const qrY = 420;
+
+      // QR border card
+      ctx.fillStyle = "#F8FAFC";
+      const cardPad = 30;
+      const cardX = qrX - cardPad;
+      const cardY = qrY - cardPad;
+      const cardW = qrSize + cardPad * 2;
+      const cardH = qrSize + cardPad * 2;
+
+      const r = 24;
+      ctx.beginPath();
+      ctx.moveTo(cardX + r, cardY);
+      ctx.lineTo(cardX + cardW - r, cardY);
+      ctx.quadraticCurveTo(cardX + cardW, cardY, cardX + cardW, cardY + r);
+      ctx.lineTo(cardX + cardW, cardY + cardH - r);
+      ctx.quadraticCurveTo(cardX + cardW, cardY + cardH, cardX + cardW - r, cardY + cardH);
+      ctx.lineTo(cardX + r, cardY + cardH);
+      ctx.quadraticCurveTo(cardX, cardY + cardH, cardX, cardY + cardH - r);
+      ctx.lineTo(cardX, cardY + r);
+      ctx.quadraticCurveTo(cardX, cardY, cardX + r, cardY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw QR
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+      // Overlay KRAMA in center of QR
+      const badgeW = 200;
+      const badgeH = 56;
+      const badgeX = width / 2 - badgeW / 2;
+      const badgeY = qrY + qrSize / 2 - badgeH / 2;
+
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      const br = 10;
+      ctx.beginPath();
+      ctx.moveTo(badgeX + br, badgeY);
+      ctx.lineTo(badgeX + badgeW - br, badgeY);
+      ctx.quadraticCurveTo(badgeX + badgeW, badgeY, badgeX + badgeW, badgeY + br);
+      ctx.lineTo(badgeX + badgeW, badgeY + badgeH - br);
+      ctx.quadraticCurveTo(badgeX + badgeW, badgeY + badgeH, badgeX + badgeW - br, badgeY + badgeH);
+      ctx.lineTo(badgeX + br, badgeY + badgeH);
+      ctx.quadraticCurveTo(badgeX, badgeY + badgeH, badgeX, badgeY + badgeH - br);
+      ctx.lineTo(badgeX, badgeY + br);
+      ctx.quadraticCurveTo(badgeX, badgeY, badgeX + br, badgeY);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "#00555A";
+      ctx.font = "bold 28px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("KRAMA", width / 2, badgeY + 38);
+
+      // Footer
+      ctx.fillStyle = "#64748B";
+      ctx.font = "22px Arial";
+      ctx.fillText("Scan to join the queue", width / 2, 1240);
+      ctx.font = "18px Arial";
+      const clinicIdLine = `Clinic ID: ${dbProfile?.clinic_id || ""}`;
+      ctx.fillText(clinicIdLine, width / 2, 1280);
+
+      URL.revokeObjectURL(qrObjectUrl);
+
+      canvas.toBlob((outBlob) => {
+        if (!outBlob) {
+          setMessage({ text: "Failed to generate QR sheet", type: "error" });
+          return;
+        }
+
+        const outUrl = URL.createObjectURL(outBlob);
+        const a = document.createElement("a");
+        a.href = outUrl;
+        a.download = `${dbProfile?.clinic_id || "clinic"}-qr-a4.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(outUrl);
+      }, "image/png");
+    } catch (error) {
+      setMessage({ text: "Failed to download QR code", type: "error" });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -496,6 +641,17 @@ const ClinicProfile = () => {
               </div>
             )}
             <p className="mt-4 text-sm text-muted-foreground">{dbProfile?.clinic_name}</p>
+
+            <Button
+              title="Download QR Code"
+              variant="outline"
+              onClick={downloadClinicQr}
+              className="mt-4 w-full"
+              disabled={!getClinicQrUrl()}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download QR
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
