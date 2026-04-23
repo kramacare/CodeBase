@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthCard from "@/components/auth/AuthCard";
-import ClinicTermsModal from "@/components/auth/ClinicTermsModal";
 
 import { Building2, Lock, ArrowRight } from "lucide-react";
 
@@ -17,18 +16,12 @@ const ClinicLogin = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{text: string; type: "success" | "error"} | null>(null);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-
   useEffect(() => {
     if (message) {
       const timer = setTimeout(() => setMessage(null), 5000);
       return () => clearTimeout(timer);
     }
   }, [message]);
-
-  const proceedToSignup = () => {
-    navigate("/clinic/register");
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,25 +136,16 @@ const ClinicLogin = () => {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             New clinic?{" "}
-            <button
-              onClick={() => setShowTermsModal(true)}
+            <Link
+              to="/clinic/register"
               className="font-medium text-primary hover:underline"
             >
               Register your clinic
-            </button>
+            </Link>
           </p>
         </AuthCard>
       </div>
 
-      {/* Clinic Terms Modal */}
-      <ClinicTermsModal
-        open={showTermsModal}
-        onOpenChange={setShowTermsModal}
-        onAccept={() => {
-          setShowTermsModal(false);
-          proceedToSignup();
-        }}
-      />
     </>
   );
 };

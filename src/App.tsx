@@ -1,9 +1,10 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import MainLayout from "./layouts/MainLayout";
 import NoHeaderLayout from "./layouts/NoHeaderLayout";
 import { QueueProvider } from "./context/QueueContext";
 import { PatientProvider } from "./context/PatientContext";
+import AdminProtectedRoute from "./components/AdminProtectedRoute";
 
 import Index from "./pages/Index";
 import PatientDashboard from "./pages/PatientDashboard";
@@ -31,6 +32,8 @@ import PatientResetPassword from "./pages/PatientResetPassword";
 import ClinicLogin from "./pages/ClinicLogin";
 import ClinicSignup from "./pages/ClinicSignup";
 import ClinicRegistrationSuccess from "./pages/ClinicRegistrationSuccess";
+import AdminLogin from "./pages/AdminLogin";
+import AdminDashboard from "./pages/AdminDashboard";
 import AboutUs from "./pages/AboutUs";
 import NotFound from "./pages/NotFound";
 
@@ -79,6 +82,20 @@ function App() {
             <Route path="/clinic/manage-time" element={<NoHeaderLayout><ClinicManageTime /></NoHeaderLayout>} />
             <Route path="/clinic/look" element={<NoHeaderLayout><ClinicLook /></NoHeaderLayout>} />
             <Route path="/clinic/profile" element={<NoHeaderLayout><ClinicProfile /></NoHeaderLayout>} />
+
+            {/* Admin Area - Secure Routes */}
+            <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
+            <Route path="/admin/login" element={<NoHeaderLayout><AdminLogin /></NoHeaderLayout>} />
+            <Route 
+              path="/admin/dashboard" 
+              element={
+                <NoHeaderLayout>
+                  <AdminProtectedRoute>
+                    <AdminDashboard />
+                  </AdminProtectedRoute>
+                </NoHeaderLayout>
+              } 
+            />
 
             {/* 404 with Header */}
             <Route path="*" element={<MainLayout><NotFound /></MainLayout>} />

@@ -5,14 +5,21 @@ import re
 import os
 import uuid
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.database.db import get_db
-from app.database.models import Clinic, Patient, OTPVerification, Appointment, CompletedAppointment, Review, ReviewReaction, ClinicImage, QRAppointment
+from app.database.models import (
+    Clinic, Patient, OTPVerification, Appointment, CompletedAppointment,
+    Review, ReviewReaction, ClinicImage, QRAppointment, PendingClinicRegistration
+)
+from app.services.geocoding_service import get_coordinates_from_structured_address
+from app.services.email_service import send_clinic_registration_received_email
 from app.schemas import (
     ClinicSignup, ClinicLogin, PatientSignup, PatientLogin,
-    ChangePasswordRequest, ChangePhoneRequest, DeleteAccountRequest,
+    ChangePasswordRequest, ChangePhoneRequest, DeleteAccountRequest, DeleteClinicRequest,
     AuthResponse, SendOTPRequest, VerifyOTPRequest, OTPResponse, OTPVerifyResponse
 )
 from app.security import hash_password, verify_password
@@ -65,48 +72,377 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 
 @router.post("/clinic/signup", response_model=AuthResponse)
 async def clinic_signup(clinic_data: ClinicSignup, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Clinic).where(Clinic.email == clinic_data.email))
-    existing_clinic = result.scalar_one_or_none()
+    import traceback
+    try:
+        # Check if email exists in approved clinics
+        result = await db.execute(select(Clinic).where(Clinic.email == clinic_data.email))
+        existing_clinic = result.scalar_one_or_none()
+        
+        if existing_clinic:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered with an approved clinic"
+            )
+        
+        # Check if email exists in pending registrations
+        result = await db.execute(
+            select(PendingClinicRegistration)
+            .where(PendingClinicRegistration.email == clinic_data.email)
+            .where(PendingClinicRegistration.status == "pending")
+        )
+        existing_pending = result.scalar_one_or_none()
+        
+        if existing_pending:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A registration request with this email is already pending approval"
+            )
+        
+        # Validate password strength (same as patient signup)
+        valid, error_msg = validate_password_strength(clinic_data.password)
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        
+        hashed_password = hash_password(clinic_data.password)
+        
+        # Generate unique clinic ID
+        clinic_id = generate_clinic_id()
+        
+        # Get precise latitude and longitude from structured address
+        # Use structured components if available, otherwise fall back to full address
+        if clinic_data.street_address and clinic_data.road and clinic_data.city and clinic_data.pincode:
+            latitude, longitude = get_coordinates_from_structured_address(
+                street=clinic_data.street_address,
+                road=clinic_data.road,
+                layout=clinic_data.layout,
+                section=clinic_data.section,
+                city=clinic_data.city,
+                pincode=clinic_data.pincode
+            )
+        else:
+            # Fallback to simple address geocoding
+            from app.services.geocoding_service import get_coordinates_from_address
+            latitude, longitude = get_coordinates_from_address(clinic_data.address)
+        
+        # Create pending registration with all address components and doctor details
+        new_pending_registration = PendingClinicRegistration(
+            clinic_id=clinic_id,
+            clinic_name=clinic_data.clinic_name,
+            email=clinic_data.email,
+            password=hashed_password,
+            phone=clinic_data.phone,
+            category=clinic_data.category,
+            street_address=clinic_data.street_address or clinic_data.address.split(",")[0] if "," in clinic_data.address else clinic_data.address,
+            road=clinic_data.road or "",
+            layout=clinic_data.layout,
+            section=clinic_data.section,
+            city=clinic_data.city or "",
+            pincode=clinic_data.pincode or "",
+            address=clinic_data.address,
+            latitude=latitude,
+            longitude=longitude,
+            # Doctor details
+            doctor_name=clinic_data.doctor_name if clinic_data.doctor_name else "",
+            specialization=clinic_data.specialization,
+            experience=clinic_data.experience,
+            qualifications=clinic_data.qualifications,
+            status="pending"
+        )
+        
+        db.add(new_pending_registration)
+        await db.commit()
+        await db.refresh(new_pending_registration)
+        
+        # Send registration received email
+        email_sent = send_clinic_registration_received_email(
+            clinic_data.email,
+            clinic_data.clinic_name
+        )
+        
+        return AuthResponse(
+            message="Registration received. Your application is under review. You will receive a response within 24 hours.",
+            clinic_id=clinic_id,
+            user_type="pending_clinic"
+        )
+    except Exception as e:
+        await db.rollback()
+        error_msg = f"Error during signup: {str(e)}"
+        print(error_msg)
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg
+        )
+
+
+# ============ Clinic Signup with OTP Verification ============
+
+class ClinicSignupOTPRequest(BaseModel):
+    email: EmailStr
+    clinic_name: str
+    password: str
+    phone: str
+    category: str
+    address: str
+    street_address: Optional[str] = None
+    road: Optional[str] = None
+    layout: Optional[str] = None
+    section: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+    doctor_name: Optional[str] = None
+    specialization: Optional[str] = None
+    experience: Optional[str] = None
+    qualifications: Optional[str] = None
+
+
+class ClinicVerifySignupRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    clinic_name: str
+    password: str
+    phone: str
+    category: str
+    address: str
+    street_address: Optional[str] = None
+    road: Optional[str] = None
+    layout: Optional[str] = None
+    section: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+    doctor_name: Optional[str] = None
+    specialization: Optional[str] = None
+    experience: Optional[str] = None
+    qualifications: Optional[str] = None
+
+
+@router.post("/clinic/send-signup-otp", response_model=OTPResponse)
+async def clinic_send_signup_otp(
+    request: ClinicSignupOTPRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Send OTP for clinic registration verification.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
     
-    if existing_clinic:
+    email = request.email.strip().lower()
+    logger.info(f"Clinic signup OTP request for email: {email}")
+    
+    # Check if email exists in approved clinics
+    result = await db.execute(select(Clinic).where(Clinic.email == email))
+    if result.scalar_one_or_none():
+        logger.warning(f"Email already registered as approved clinic: {email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="Email already registered with an approved clinic"
         )
     
-    hashed_password = hash_password(clinic_data.password)
-    
-    # Generate unique clinic ID
-    clinic_id = generate_clinic_id()
-    
-    new_clinic = Clinic(
-        clinic_id=clinic_id,
-        clinic_name=clinic_data.clinic_name,
-        email=clinic_data.email,
-        password=hashed_password,
-        phone=clinic_data.phone,
-        address=clinic_data.address,
-        doctor_name=clinic_data.doctor_name if clinic_data.doctor_name else ""
+    # Check if email exists in pending registrations
+    result = await db.execute(
+        select(PendingClinicRegistration)
+        .where(PendingClinicRegistration.email == email)
+        .where(PendingClinicRegistration.status == "pending")
     )
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A registration request with this email is already pending approval"
+        )
     
-    db.add(new_clinic)
-    await db.commit()
-    await db.refresh(new_clinic)
+    # Validate password strength
+    valid, error_msg = validate_password_strength(request.password)
+    if not valid:
+        logger.warning(f"Password validation failed for {email}: {error_msg}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg
+        )
     
-    return AuthResponse(message="Signup successful", clinic_id=clinic_id)
+    # Send OTP
+    logger.info(f"Sending OTP to {email}")
+    success, message = await OTPService.send_otp(db, email)
+    logger.info(f"OTP send result for {email}: success={success}, message={message}")
+    
+    if not success:
+        logger.error(f"Failed to send OTP to {email}: {message}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message
+        )
+    
+    return {
+        "success": True,
+        "message": "OTP sent to your email. Please verify to complete registration.",
+        "email": email
+    }
+
+
+@router.post("/clinic/verify-signup", response_model=AuthResponse)
+async def clinic_verify_signup(
+    request: ClinicVerifySignupRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Verify OTP and complete clinic registration.
+    """
+    import traceback
+    email = request.email.strip().lower()
+    
+    # Verify OTP
+    is_valid, message = await OTPService.verify_otp(db, email, request.otp)
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message
+        )
+    
+    try:
+        # Check again if email exists (might have been registered during OTP wait)
+        result = await db.execute(select(Clinic).where(Clinic.email == email))
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered with an approved clinic"
+            )
+        
+        result = await db.execute(
+            select(PendingClinicRegistration)
+            .where(PendingClinicRegistration.email == email)
+            .where(PendingClinicRegistration.status == "pending")
+        )
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A registration request with this email is already pending approval"
+            )
+        
+        # Hash password
+        hashed_password = hash_password(request.password)
+        
+        # Generate unique clinic ID
+        clinic_id = generate_clinic_id()
+        
+        # Get coordinates
+        if request.street_address and request.road and request.city and request.pincode:
+            latitude, longitude = get_coordinates_from_structured_address(
+                street=request.street_address,
+                road=request.road,
+                layout=request.layout,
+                section=request.section,
+                city=request.city,
+                pincode=request.pincode
+            )
+        else:
+            from app.services.geocoding_service import get_coordinates_from_address
+            latitude, longitude = get_coordinates_from_address(request.address)
+        
+        # Create pending registration
+        new_pending_registration = PendingClinicRegistration(
+            clinic_id=clinic_id,
+            clinic_name=request.clinic_name,
+            email=email,
+            password=hashed_password,
+            phone=request.phone,
+            category=request.category,
+            street_address=request.street_address or request.address.split(",")[0] if "," in request.address else request.address,
+            road=request.road or "",
+            layout=request.layout,
+            section=request.section,
+            city=request.city or "",
+            pincode=request.pincode or "",
+            address=request.address,
+            latitude=latitude,
+            longitude=longitude,
+            doctor_name=request.doctor_name or "",
+            specialization=request.specialization,
+            experience=request.experience,
+            qualifications=request.qualifications,
+            status="pending"
+        )
+        
+        db.add(new_pending_registration)
+        await db.commit()
+        await db.refresh(new_pending_registration)
+        
+        # Delete OTP after successful registration
+        await OTPService.delete_otp(db, email)
+        
+        # Send registration received email
+        send_clinic_registration_received_email(
+            email,
+            request.clinic_name
+        )
+        
+        return AuthResponse(
+            message="Registration received. Your application is under review. You will receive a response within 24 hours.",
+            clinic_id=clinic_id,
+            user_type="pending_clinic"
+        )
+    except Exception as e:
+        await db.rollback()
+        error_msg = f"Error during signup: {str(e)}"
+        print(error_msg)
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg
+        )
 
 @router.post("/clinic/login", response_model=AuthResponse)
 async def clinic_login(login_data: ClinicLogin, db: AsyncSession = Depends(get_db)):
+    # First check if there's an approved clinic with this email
     result = await db.execute(select(Clinic).where(Clinic.email == login_data.email))
     clinic = result.scalar_one_or_none()
     
-    if not clinic or not verify_password(login_data.password, clinic.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
-        )
+    if clinic:
+        if not verify_password(login_data.password, clinic.password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+        return AuthResponse(message="Login successful", user_type="clinic", clinic_id=clinic.clinic_id)
     
-    return AuthResponse(message="Login successful", user_type="clinic", clinic_id=clinic.clinic_id)
+    # Check if there's a pending registration with this email
+    result = await db.execute(
+        select(PendingClinicRegistration)
+        .where(PendingClinicRegistration.email == login_data.email)
+        .where(PendingClinicRegistration.status == "pending")
+    )
+    pending_reg = result.scalar_one_or_none()
+    
+    if pending_reg:
+        # Verify password to confirm it's the right user
+        if verify_password(login_data.password, pending_reg.password):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your registration is still pending approval. Please wait for the admin to review your application. You will receive an email once approved."
+            )
+    
+    # Check if there was a rejected registration
+    result = await db.execute(
+        select(PendingClinicRegistration)
+        .where(PendingClinicRegistration.email == login_data.email)
+        .where(PendingClinicRegistration.status == "rejected")
+    )
+    rejected_reg = result.scalar_one_or_none()
+    
+    if rejected_reg:
+        if verify_password(login_data.password, rejected_reg.password):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your registration request has been rejected. Please contact support for more information."
+            )
+    
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid email or password"
+    )
 
 @router.post("/patient/signup", response_model=AuthResponse)
 async def patient_signup(patient_data: PatientSignup, db: AsyncSession = Depends(get_db)):
@@ -238,13 +574,25 @@ async def get_clinic_data(
 async def list_clinics(db: AsyncSession = Depends(get_db)):
     """
     List all clinics for patient to browse.
-    Only shows clinics that are available today (available=true).
+    Only shows clinics that are available (available=true).
     """
     result = await db.execute(select(Clinic).where(Clinic.available == True))
     clinics = result.scalars().all()
     
     clinic_list = []
     for clinic in clinics:
+        # Use actual category as specialization, or default to "general"
+        specializations = [clinic.category.lower()] if clinic.category else ["general"]
+        
+        # Build doctors array from actual doctor_name
+        doctors = []
+        if clinic.doctor_name:
+            doctors.append({
+                "name": clinic.doctor_name,
+                "specialization": clinic.specialization or "",
+                "experience": clinic.experience or ""
+            })
+        
         clinic_list.append({
             "id": clinic.id,
             "clinic_id": clinic.clinic_id,
@@ -252,13 +600,18 @@ async def list_clinics(db: AsyncSession = Depends(get_db)):
             "email": clinic.email,
             "phone": clinic.phone,
             "address": clinic.address,
+            "city": clinic.city or "",
+            "category": clinic.category or "",
             "doctor_name": clinic.doctor_name or "",
-            "specializations": ["general"],  # Default specialization
-            "doctors": [{"name": clinic.doctor_name or "Available Doctor"}],
-            "rating": 4.5,  # Default rating
-            "wait_time": "15-30 min",
-            "distance": "2.5 km",
-            "is_active": clinic.is_active or False
+            "specialization": clinic.specialization or "",
+            "experience": clinic.experience or "",
+            "qualifications": clinic.qualifications or "",
+            "latitude": clinic.latitude,
+            "longitude": clinic.longitude,
+            "specializations": specializations,
+            "doctors": doctors if doctors else [{"name": "Available Doctor"}],
+            "is_active": clinic.is_active or False,
+            "available": clinic.available or False
         })
     
     return {"clinics": clinic_list}
@@ -564,10 +917,10 @@ async def delete_clinic_image(
 
 @router.delete("/clinic/delete")
 async def clinic_delete_account(
-    request: DeleteAccountRequest,
+    request: DeleteClinicRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(Clinic).where(Clinic.clinic_id == request.patient_email))
+    result = await db.execute(select(Clinic).where(Clinic.clinic_id == request.clinic_id))
     clinic = result.scalar_one_or_none()
     
     if not clinic:

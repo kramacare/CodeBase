@@ -39,7 +39,7 @@ const medicalCategories: Record<
     icon: "🦷",
   },
   bone: {
-    name: "Bone",
+    name: "Bone & Joint",
     description: "Bone fractures, joint pain treatment",
     icon: "🦴",
   },
@@ -53,6 +53,36 @@ const medicalCategories: Record<
     description: "Ear nose throat problems treatment",
     icon: "👂",
   },
+  heart: {
+    name: "Cardiology",
+    description: "Heart-related issues",
+    icon: "❤️",
+  },
+  neuro: {
+    name: "Neurology",
+    description: "Brain, nerves, spine",
+    icon: "🧠",
+  },
+  child: {
+    name: "Pediatric",
+    description: "Child care, vaccination",
+    icon: "👶",
+  },
+  women: {
+    name: "Gynecology",
+    description: "Women's health",
+    icon: "🌸",
+  },
+  mental: {
+    name: "Mental Health",
+    description: "Psychiatry, counseling",
+    icon: "🧘",
+  },
+  physio: {
+    name: "Physiotherapy",
+    description: "Physical therapy, rehab",
+    icon: "💪",
+  },
   vet: {
     name: "Pet Hospital",
     description: "Pet treatment and grooming services",
@@ -62,6 +92,26 @@ const medicalCategories: Record<
     name: "Scanning Center",
     description: "X-ray, MRI, CT scan services",
     icon: "📷",
+  },
+  lab: {
+    name: "Diagnostic Lab",
+    description: "Blood tests, diagnostics",
+    icon: "🧪",
+  },
+  ayurveda: {
+    name: "Ayurveda",
+    description: "Ayurvedic treatment",
+    icon: "🌿",
+  },
+  homeo: {
+    name: "Homeopathy",
+    description: "Homeopathic treatment",
+    icon: "💊",
+  },
+  other: {
+    name: "Other",
+    description: "Other specializations",
+    icon: "🏥",
   },
 };
 
@@ -188,17 +238,17 @@ const PatientFindClinics = () => {
           setLoading(true);
           setTimeout(() => setLoading(false), 1200);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { 
+          enableHighAccuracy: true, 
+          timeout: 30000, 
+          maximumAge: 0 
+        }
       );
     } else {
       setLocationName("Geolocation not supported");
       setLocationGranted(true);
       setLocationLoading(false);
     }
-  };
-
-  const handleManual = () => {
-    setMessage({text: "Please enter your location manually", type: "success"});
   };
 
   const filtered = clinics.filter((c) => {
@@ -248,7 +298,6 @@ const PatientFindClinics = () => {
           <div className="mt-10">
             <LocationAccessCard
               onUseGPS={handleGPS}
-              onManual={handleManual}
               loading={locationLoading}
             />
           </div>

@@ -281,6 +281,8 @@ const ClinicProfile = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clinic_id: loggedInClinicId,
+          password: password,
+          confirmation: "DELETE"
         }),
       });
 
@@ -289,7 +291,8 @@ const ClinicProfile = () => {
         localStorage.clear();
         navigate("/clinic/login");
       } else {
-        setMessage({ text: "Failed to delete account", type: "error" });
+        const errorData = await response.json();
+        setMessage({ text: errorData.detail || "Failed to delete account", type: "error" });
       }
     } catch (error) {
       setMessage({ text: "Error deleting account", type: "error" });

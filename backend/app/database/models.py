@@ -13,14 +13,26 @@ class Clinic(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=False)
     phone = Column(String, nullable=False)
-    address = Column(String, nullable=False)
-    image_urls = Column(JSON, default=list)  # Store image IDs for reference
+    category = Column(String, nullable=True)
+    street_address = Column(String, nullable=True)
+    road = Column(String, nullable=True)
+    layout = Column(String, nullable=True)
+    section = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+    pincode = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    latitude = Column(String, nullable=True)
+    longitude = Column(String, nullable=True)
+    image_urls = Column(JSON, default=list)
     doctor_name = Column(String, nullable=True)
+    specialization = Column(String, nullable=True)
+    experience = Column(String, nullable=True)
+    qualifications = Column(String, nullable=True)
     available = Column(Boolean, default=True)
     start = Column(Integer, nullable=True)
     end = Column(Integer, nullable=True)
-    booking_cutoff_minutes = Column(Integer, default=15)  # Stop booking X minutes before end
-    is_active = Column(Boolean, default=False)  # True when clinic clicks "Start"
+    booking_cutoff_minutes = Column(Integer, default=15)
+    is_active = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ClinicImage(Base):
@@ -145,3 +157,75 @@ class QRAppointment(Base):
     date = Column(String, nullable=False)
     status = Column(String, default="booked")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class PendingClinicRegistration(Base):
+    """Model for storing pending clinic registrations awaiting admin approval"""
+    __tablename__ = "pending_clinic_registrations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_id = Column(String, unique=True, index=True, nullable=False)
+    clinic_name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    category = Column(String, nullable=True)
+    street_address = Column(String, nullable=True)
+    road = Column(String, nullable=True)
+    layout = Column(String, nullable=True)
+    section = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+    pincode = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    latitude = Column(String, nullable=True)
+    longitude = Column(String, nullable=True)
+    doctor_name = Column(String, nullable=True)
+    specialization = Column(String, nullable=True)
+    experience = Column(String, nullable=True)
+    qualifications = Column(String, nullable=True)
+    image_urls = Column(JSON, default=list)
+    status = Column(String, default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class Admin(Base):
+    """Model for admin users who can approve/reject clinic registrations"""
+    __tablename__ = "admins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password = Column(String, nullable=False)
+    role = Column(String, default="admin")  # admin, super_admin
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_login = Column(DateTime(timezone=True), nullable=True)
+
+class RejectedClinic(Base):
+    """Model for storing rejected clinic registrations"""
+    __tablename__ = "rejected_clinics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clinic_id = Column(String, unique=True, index=True, nullable=True)
+    clinic_name = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    password = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    category = Column(String, nullable=True)
+    street_address = Column(String, nullable=True)
+    road = Column(String, nullable=True)
+    layout = Column(String, nullable=True)
+    section = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+    pincode = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    latitude = Column(String, nullable=True)
+    longitude = Column(String, nullable=True)
+    doctor_name = Column(String, nullable=True)
+    specialization = Column(String, nullable=True)
+    experience = Column(String, nullable=True)
+    qualifications = Column(String, nullable=True)
+    image_urls = Column(JSON, default=list)
+    rejection_reason = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    rejected_at = Column(DateTime(timezone=True), server_default=func.now())

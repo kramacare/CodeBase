@@ -23,6 +23,8 @@ class EmailService:
         self.sender_email = (os.getenv("FROM_EMAIL", self.smtp_user) or "").strip()
         self.sender_name = os.getenv("SENDER_NAME", "Krama Clinic")
 
+        logger.info(f"EmailService initialized: smtp_user={self.smtp_user}, smtp_host={self.smtp_host}, smtp_port={self.smtp_port}")
+        
         if not self.smtp_user or not self.smtp_password:
             logger.warning(
                 "EmailService SMTP is not fully configured. SMTP_USERNAME or SMTP_PASSWORD missing."
@@ -159,6 +161,8 @@ class EmailService:
         Returns:
             bool: Success status
         """
+        logger.info(f"Attempting to send email to {to_email}, subject: {subject}")
+        
         if not self.smtp_user or not self.smtp_password:
             logger.warning(
                 "SMTP credentials not configured (SMTP_USERNAME/SMTP_PASSWORD). Email not sent."
@@ -209,3 +213,229 @@ def send_otp(to_email: str, otp_code: str) -> bool:
 def send_queue_alert(to_email: str, patient_name: str, clinic_name: str, alert_type: str) -> bool:
     """Convenience function to send queue alert email"""
     return email_service.send_queue_alert_email(to_email, patient_name, clinic_name, alert_type)
+
+
+# ============ Clinic Registration Email Functions ============
+
+def send_clinic_registration_received_email(to_email: str, clinic_name: str) -> bool:
+    """
+    Send email to clinic confirming their registration request has been received
+    and is pending admin approval.
+    """
+    subject = "Registration Received - Pending Approval"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: #00555A; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+            .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+            .footer {{ font-size: 12px; color: #888; text-align: center; margin-top: 20px; }}
+            .highlight {{ background: #e8f4f8; padding: 15px; border-left: 4px solid #00555A; margin: 20px 0; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h2>Registration Received</h2>
+            </div>
+            <div class="content">
+                <p>Dear <strong>{clinic_name}</strong>,</p>
+                <p>Thank you for registering with Krama Care!</p>
+                
+                <div class="highlight">
+                    <p><strong>Your registration request has been received and is now under review.</strong></p>
+                    <p>You will receive a response within <strong>24 hours</strong> regarding the status of your application.</p>
+                </div>
+                
+                <p>Please note that you <strong>cannot log in</strong> until your registration has been approved by our admin team.</p>
+                
+                <p>If you have any questions, please feel free to contact us.</p>
+                
+                <p>Best regards,<br>
+                <strong>Krama Care Team</strong></p>
+            </div>
+            <div class="footer">
+                <p>© 2024 Krama Care. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_content = f"""
+    Registration Received - Pending Approval
+    =========================================
+    
+    Dear {clinic_name},
+    
+    Thank you for registering with Krama Care!
+    
+    Your registration request has been received and is now under review.
+    You will receive a response within 24 hours regarding the status of your application.
+    
+    Please note that you cannot log in until your registration has been approved by our admin team.
+    
+    If you have any questions, please feel free to contact us.
+    
+    Best regards,
+    Krama Care Team
+    
+    © 2024 Krama Care. All rights reserved.
+    """
+    
+    return email_service._send_email(to_email, subject, text_content, html_content)
+
+
+def send_clinic_approval_email(to_email: str, clinic_name: str, clinic_id: str) -> bool:
+    """
+    Send email to clinic confirming their registration has been approved.
+    """
+    subject = "Registration Approved - Welcome to Krama Care!"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: #28a745; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+            .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+            .footer {{ font-size: 12px; color: #888; text-align: center; margin-top: 20px; }}
+            .success-box {{ background: #d4edda; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0; }}
+            .clinic-id {{ background: #fff; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 16px; text-align: center; margin: 10px 0; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h2>Registration Approved!</h2>
+            </div>
+            <div class="content">
+                <p>Dear <strong>{clinic_name}</strong>,</p>
+                
+                <div class="success-box">
+                    <p><strong>Congratulations!</strong> Your registration has been approved by our admin team.</p>
+                </div>
+                
+                <p>You can now log in to your clinic dashboard and start managing your appointments.</p>
+                
+                <p><strong>Your Clinic ID:</strong></p>
+                <div class="clinic-id">{clinic_id}</div>
+                
+                <p>Please keep this ID safe as you will need it for logging in and managing your clinic.</p>
+                
+                <p><a href="#" style="background: #00555A; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 20px 0;">Go to Login</a></p>
+                
+                <p>Welcome to the Krama Care family!</p>
+                
+                <p>Best regards,<br>
+                <strong>Krama Care Team</strong></p>
+            </div>
+            <div class="footer">
+                <p>© 2024 Krama Care. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_content = f"""
+    Registration Approved - Welcome to Krama Care!
+    ================================================
+    
+    Dear {clinic_name},
+    
+    Congratulations! Your registration has been approved by our admin team.
+    
+    You can now log in to your clinic dashboard and start managing your appointments.
+    
+    Your Clinic ID: {clinic_id}
+    
+    Please keep this ID safe as you will need it for logging in and managing your clinic.
+    
+    Welcome to the Krama Care family!
+    
+    Best regards,
+    Krama Care Team
+    
+    © 2024 Krama Care. All rights reserved.
+    """
+    
+    return email_service._send_email(to_email, subject, text_content, html_content)
+
+
+def send_clinic_rejection_email(to_email: str, clinic_name: str, reason: str = None) -> bool:
+    """
+    Send email to clinic informing them their registration has been rejected.
+    """
+    subject = "Registration Status Update"
+    
+    reason_text = f"<p><strong>Reason:</strong> {reason}</p>" if reason else ""
+    reason_text_plain = f"Reason: {reason}" if reason else ""
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+            .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+            .footer {{ font-size: 12px; color: #888; text-align: center; margin-top: 20px; }}
+            .notice-box {{ background: #f8d7da; padding: 15px; border-left: 4px solid #dc3545; margin: 20px 0; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h2>Registration Update</h2>
+            </div>
+            <div class="content">
+                <p>Dear <strong>{clinic_name}</strong>,</p>
+                
+                <div class="notice-box">
+                    <p><strong>We regret to inform you that your registration request has not been approved at this time.</strong></p>
+                    {reason_text}
+                </div>
+                
+                <p>If you believe this was a mistake or would like to provide additional information, please contact our support team.</p>
+                
+                <p>Thank you for your interest in Krama Care.</p>
+                
+                <p>Best regards,<br>
+                <strong>Krama Care Team</strong></p>
+            </div>
+            <div class="footer">
+                <p>© 2024 Krama Care. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_content = f"""
+    Registration Update
+    ===================
+    
+    Dear {clinic_name},
+    
+    We regret to inform you that your registration request has not been approved at this time.
+    {reason_text_plain}
+    
+    If you believe this was a mistake or would like to provide additional information, please contact our support team.
+    
+    Thank you for your interest in Krama Care.
+    
+    Best regards,
+    Krama Care Team
+    
+    © 2024 Krama Care. All rights reserved.
+    """
+    
+    return email_service._send_email(to_email, subject, text_content, html_content)

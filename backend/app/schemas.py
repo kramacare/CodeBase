@@ -10,8 +10,20 @@ class ClinicSignup(BaseModel):
     email: EmailStr
     password: str
     phone: str
-    address: str
-    doctor_name: Optional[str] = ""  # Doctor name field
+    category: str  # Clinic category (e.g., general, dental, skin)
+    address: str  # Full combined address
+    # Individual address components
+    street_address: Optional[str] = None  # Street/Building Number
+    road: Optional[str] = None  # Road/Street Name
+    layout: Optional[str] = None  # Layout/Area
+    section: Optional[str] = None  # Section/Block
+    city: Optional[str] = None  # City
+    pincode: Optional[str] = None  # Pincode
+    # Doctor details
+    doctor_name: Optional[str] = ""  # Doctor name
+    specialization: Optional[str] = ""  # Specialization
+    experience: Optional[str] = ""  # Years of experience
+    qualifications: Optional[str] = ""  # Qualifications (MBBS, MD, etc.)
 
 class ClinicLogin(BaseModel):
     email: EmailStr
@@ -68,6 +80,11 @@ class DeleteAccountRequest(BaseModel):
     password: str
     confirmation: str = "DELETE"
     patient_email: str
+
+class DeleteClinicRequest(BaseModel):
+    password: str
+    confirmation: str = "DELETE"
+    clinic_id: str
 
 # Appointment Schemas
 class AppointmentCreateRequest(BaseModel):
