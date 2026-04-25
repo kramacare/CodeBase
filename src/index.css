@@ -2,6 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Global Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #10b981, #059669);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #059669, #047857);
+}
+
+/* Firefox Scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #10b981 #f1f5f9;
+}
+
 @layer base {
   :root {
     --background: 42 33% 97%;
@@ -105,4 +135,244 @@
   .glass-panel {
     @apply border border-white/60 bg-white/75 shadow-[0_18px_60px_-28px_rgba(19,55,50,0.35)] backdrop-blur-xl;
   }
+}
+
+/* Gradient Background Animations */
+@keyframes gradient-xy {
+  0%, 100% {
+    background-position: 0% 0%;
+  }
+  25% {
+    background-position: 100% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  75% {
+    background-position: 0% 100%;
+  }
+}
+
+@keyframes gradient-yx {
+  0%, 100% {
+    background-position: 0% 0%;
+  }
+  25% {
+    background-position: 0% 100%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  75% {
+    background-position: 100% 0%;
+  }
+}
+
+.animate-gradient-xy {
+  background-size: 400% 400%;
+  animation: gradient-xy 15s ease infinite;
+}
+
+.animate-gradient-yx {
+  background-size: 400% 400%;
+  animation: gradient-yx 20s ease infinite;
+}
+
+/* Global UI Improvements */
+@layer components {
+  /* Consistent Border Radius */
+  .btn {
+    @apply rounded-2xl transition-all duration-300;
+  }
+  
+  .card {
+    @apply rounded-2xl transition-all duration-300;
+  }
+  
+  .panel {
+    @apply rounded-2xl transition-all duration-300;
+  }
+  
+  /* Improved Spacing System */
+  .section-spacing {
+    @apply py-16 md:py-24;
+  }
+  
+  .content-spacing {
+    @apply px-4 md:px-8;
+  }
+  
+  .card-spacing {
+    @apply p-6 md:p-8;
+  }
+  
+  /* Enhanced Button Styles */
+  .btn-primary {
+    @apply bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300;
+  }
+  
+  .btn-secondary {
+    @apply bg-white hover:bg-gray-50 text-emerald-700 border-2 border-emerald-200 hover:border-emerald-300 font-semibold shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-300;
+  }
+  
+  /* Improved Color System */
+  .text-primary-green {
+    @apply text-emerald-600;
+  }
+  
+  .bg-primary-green {
+    @apply bg-emerald-600;
+  }
+  
+  .text-soft-neutral {
+    @apply text-gray-600;
+  }
+  
+  .bg-soft-neutral {
+    @apply bg-gray-50;
+  }
+  
+  /* Enhanced Glass Effect */
+  .glass-enhanced {
+    @apply bg-white/80 backdrop-blur-xl border border-white/50 shadow-xl;
+  }
+  
+  /* Mobile Optimizations */
+  @media (max-width: 768px) {
+    .section-spacing {
+      @apply py-12;
+    }
+    
+    .content-spacing {
+      @apply px-4;
+    }
+    
+    .card-spacing {
+      @apply p-6;
+    }
+    
+    h1 {
+      @apply text-4xl;
+    }
+    
+    h2 {
+      @apply text-3xl;
+    }
+  }
+}
+
+/* Global Animation Classes */
+@layer utilities {
+  .fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+  }
+  
+  .fade-in-down {
+    animation: fadeInDown 0.6s ease-out;
+  }
+  
+  .fade-in-left {
+    animation: fadeInLeft 0.6s ease-out;
+  }
+  
+  .fade-in-right {
+    animation: fadeInRight 0.6s ease-out;
+  }
+  
+  .pulse-soft {
+    animation: pulseSoft 2s ease-in-out infinite;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulseSoft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Radial Gradient Utility */
+.bg-radial-gradient {
+  background: radial-gradient(circle at center, var(--tw-gradient-stops));
+}
+
+/* Enhanced Radial Gradient for CTA */
+.bg-radial-highlight {
+  background: radial-gradient(circle at center, rgba(34, 197, 94, 0.25), transparent 60%);
+}
+
+/* Noise Texture Overlay */
+.noise-overlay {
+  position: relative;
+}
+
+.noise-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Very Slow Gradient Animation for CTA */
+@keyframes gradient-slow-xy {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-slow-xy {
+  background-size: 200% 200%;
+  animation: gradient-slow-xy 25s ease infinite;
 }

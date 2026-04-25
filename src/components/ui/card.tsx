@@ -1,9 +1,18 @@
 import * as React from "react";
-
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { cardVariants } from "@/lib/animations";
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...props} />
+const Card = React.forwardRef<HTMLDivElement, Omit<React.HTMLAttributes<HTMLDivElement>, keyof typeof motion.div>>(({ className, ...props }, ref) => (
+  <motion.div 
+    ref={ref} 
+    variants={cardVariants}
+    initial="hidden"
+    animate="visible"
+    whileHover="hover"
+    className={cn("rounded-2xl border bg-card text-card-foreground shadow-soft hover:shadow-hover transition-shadow duration-200", className)} 
+    {...(props as any)} 
+  />
 ));
 Card.displayName = "Card";
 

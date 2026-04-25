@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthCard from "@/components/auth/AuthCard";
+import Layout from "@/components/layout/Layout";
+import { pageLoadVariants } from "@/lib/animations";
 
 import { Activity, Mail, Lock, ArrowRight } from "lucide-react";
 
@@ -69,29 +72,40 @@ const PatientLogin = () => {
   };
 
   return (
-    <>
-      <div className="flex min-h-[calc(100vh-64px)]">
+    <Layout>
+      <motion.div 
+        variants={pageLoadVariants}
+        initial="hidden"
+        animate="visible"
+        className="flex min-h-[calc(100vh-64px)]"
+      >
         {/* LEFT BRANDING PANEL */}
-        <div className="hidden flex-1 items-center justify-center bg-primary/5 lg:flex">
+        <motion.div 
+          variants={pageLoadVariants}
+          className="hidden lg:flex flex-1 items-center justify-center bg-primary/5"
+        >
           <div className="max-w-sm text-center">
             <Activity className="mx-auto h-16 w-16 text-primary" />
-            <h2 className="mt-6 text-3xl font-bold text-foreground">
+            <h2 className="mt-6 text-2xl sm:text-3xl md:text-4xl font-bold text-foreground">
               Krama
             </h2>
-            <p className="mt-3 text-muted-foreground">
+            <p className="mt-3 text-sm sm:text-base text-muted-foreground">
               Skip the wait. Book clinic appointments and track your queue in real time.
             </p>
           </div>
-        </div>
+        </motion.div>
 
         {/* RIGHT LOGIN FORM */}
-        <div className="flex flex-1 items-center justify-center px-4 py-12">
+        <motion.div 
+          variants={pageLoadVariants}
+          className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12"
+        >
           <AuthCard>
             <div className="mb-6 text-center lg:text-left">
-              <h1 className="text-2xl font-bold text-foreground">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground">
                 Patient Login
               </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm sm:text-base text-muted-foreground">
                 Welcome back! Sign in to manage your appointments.
               </p>
             </div>
@@ -157,9 +171,9 @@ const PatientLogin = () => {
               </Link>
             </p>
           </AuthCard>
-        </div>
-      </div>
-    </>
+        </motion.div>
+      </motion.div>
+    </Layout>
   );
 };
 

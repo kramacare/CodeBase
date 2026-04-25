@@ -8,7 +8,7 @@ interface AuthCardProps {
 const AuthCard = ({ children, className }: AuthCardProps) => (
   <div
     className={cn(
-      "w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-lg",
+      "w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-soft",
       className
     )}
   >

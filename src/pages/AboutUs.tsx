@@ -155,7 +155,7 @@ const AboutUs = () => {
                   <Mail className="w-5 h-5 text-[#00555A]" />
                   <div>
                     <p className="font-medium text-[#0F172A]">Email</p>
-                    <p className="text-gray-600">support@krama.com</p>
+                    <p className="text-gray-600">krama.care@gmail.com</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

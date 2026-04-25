@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthCard from "@/components/auth/AuthCard";
+import Layout from "@/components/layout/Layout";
+import { pageLoadVariants } from "@/lib/animations";
 
 import { Building2, Lock, ArrowRight } from "lucide-react";
 
@@ -75,19 +78,24 @@ const ClinicLogin = () => {
   };
 
   return (
-    <>
-      <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-secondary/30 px-4 py-12">
+    <Layout>
+      <motion.div 
+        variants={pageLoadVariants}
+        initial="hidden"
+        animate="visible"
+        className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-secondary/30 px-4 py-8 sm:py-12"
+      >
         <AuthCard>
           <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
             <Building2 className="h-7 w-7 text-primary" />
           </div>
 
           <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground">
               Clinic Staff Login
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Access your clinic's queue management dashboard.
+            <p className="mt-1 text-sm sm:text-base text-muted-foreground">
+              Welcome back! Sign in to manage your clinic dashboard.
             </p>
           </div>
 
@@ -98,7 +106,7 @@ const ClinicLogin = () => {
           )}
 
           {message && (
-            <div className={`mb-4 rounded-lg px-4 py-2 text-sm ${message.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+            <div className={`mb-4 rounded-lg px-4 py-2 text-sm ${message.type === "success" ? "bg-accent/10 text-accent" : "bg-destructive/10 text-destructive"}`}>
               {message.text}
             </div>
           )}
@@ -144,9 +152,8 @@ const ClinicLogin = () => {
             </Link>
           </p>
         </AuthCard>
-      </div>
-
-    </>
+      </motion.div>
+    </Layout>
   );
 };
 
